@@ -18,9 +18,9 @@ var server = require('http').createServer(app);
 
 var io = require('socket.io')(server);
 //var port = process.env.PORT || 3100;
-var mongoServiceName = process.env.DATABASE_SERVICE_NAME.toUpperCase();
-var mongoHost = process.env[mongoServiceName + '_SERVICE_HOST'];
-var mongoURL = 'mongodb://' +mongoHost +':27017/swot';
+//var mongoServiceName = process.env.DATABASE_SERVICE_NAME.toUpperCase();
+//var mongoHost = process.env[mongoServiceName + '_SERVICE_HOST'];
+var mongoURL = 'mongodb://localhost:27017/swot';
 
 
 var port = process.env.PORT || process.env.OPENSHIFT_NODEJS_PORT || 3100;
