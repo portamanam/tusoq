@@ -20,8 +20,8 @@ var io = require('socket.io')(server);
 //var port = process.env.PORT || 3100;
 //var mongoServiceName = process.env.DATABASE_SERVICE_NAME.toUpperCase();
 //var mongoHost = process.env[mongoServiceName + '_SERVICE_HOST'];
-var mongoURL = 'mongodb://localhost:27017/swot';
-
+//var mongoURL = 'mongodb://localhost:27017/swot';
+var mongoURL = 'mongodb://' + process.env.OPENSHIFT_MONGODB_DB_HOST + ':' + process.env.OPENSHIFT_MONGODB_DB_PORT + '/sampledb'';
 
 var port = process.env.PORT || process.env.OPENSHIFT_NODEJS_PORT || 3100;
 var ip   = process.env.IP   || process.env.OPENSHIFT_NODEJS_IP || '0.0.0.0';
