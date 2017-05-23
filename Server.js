@@ -24,7 +24,8 @@ var io = require('socket.io')(server);
 //var mongoURL = 'mongodb://' + process.env.OPENSHIFT_MONGODB_DB_HOST + ':' + process.env.OPENSHIFT_MONGODB_DB_PORT + '/sampledb'';
 var mongoURL = 'mongodb://user3L8:hXqh7BBSeHUFhUdO@mongodb/sampledb';
 
-var port = process.env.PORT || process.env.OPENSHIFT_NODEJS_PORT || 3100;
+//var port = process.env.PORT || process.env.OPENSHIFT_NODEJS_PORT || 3100;
+var port = process.env.PORT || process.env.OPENSHIFT_NODEJS_PORT || 8080;
 var ip   = process.env.IP   || process.env.OPENSHIFT_NODEJS_IP || '0.0.0.0';
 var passport = require('passport');
 var LocalStrategy = require('passport-local').Strategy;
