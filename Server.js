@@ -44,6 +44,8 @@ var async = require('async');
 var nodemailer = require('nodemailer');
 var router      =   express.Router();
 // mongoURL = 'mongodb://userD2E:X1wbDQLqUSD1ot4w@mongodb/sampledb';
+//var mongoURL = 'mongodb://localhost:27017/sampledb';
+//var mongoURL = 'mongodb://user2GO:nLXfHKg7MsyCxuVn@0.0.0.0:27017/sampledb';
 var mongoURL = 'mongodb://user2GO:nLXfHKg7MsyCxuVn@mongodb/sampledb';
 mongoose.connect(mongoURL);
 
@@ -109,7 +111,7 @@ passport.use(new LocalStrategy(function(username, password, done) {
 passport.use(new FacebookStrategy({
     clientID: '1301406996598081',
     clientSecret: '265c7bf3e223e09773ce4b49225d4c54',
-    callbackURL: "http://localhost:3100/auth/facebook/callback"
+    callbackURL: "http://0.0.0.0:8080/auth/facebook/callback"
   },
  
  // facebook will send back the token and profile 
@@ -343,7 +345,8 @@ router.route("/user/logout")
 
 
 server.listen(port, function () {
-  console.log('Server HIHIHIH listening at port %d %d', port, ip);
+  console.log('Server HIHIHIH listening at port %d', port);
+  console.log('Server HIHIHIH listening at port %d', ip);
 });
 
 var theRoom = { 
