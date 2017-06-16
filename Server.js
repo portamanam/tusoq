@@ -342,7 +342,7 @@ router.route("/user/logout")
 
 
 server.listen(port, function () {
-  console.log('Server HIHIHIH listening at port %d', port);
+  console.log('Server HIHIHIH listening at port %d %d', port, ip);
 });
 
 var theRoom = { 
