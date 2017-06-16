@@ -35,7 +35,7 @@ var mongoURL = 'mongodb://userD2E:X1wbDQLqUSD1ot4w@mongodb/sampledb';
 var port = process.env.PORT || process.env.OPENSHIFT_NODEJS_PORT || 8080;
 var ip   = process.env.IP   || process.env.OPENSHIFT_NODEJS_IP || '0.0.0.0';
 
-var port = process.env.PORT || 3100;
+//var port = process.env.PORT || 3100;
 
 var passport = require('passport');
 var LocalStrategy = require('passport-local').Strategy;
