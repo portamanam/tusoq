@@ -11,7 +11,7 @@ module.exports = function () {
         email: { type: String, required: true, unique: true, match: [/.+\@.+\..+/, "e-mail is not valid"] },
         password: { type: String, required: true },
         resetPasswordToken: String,
-        resetPasswordExpires: Date
+        resetPasswordExpires: Date,
     });
 
 //Mongoose
