@@ -4,12 +4,17 @@ var quizzesOp     =   require("./models/quizzes");
 var bodyParser  =   require("body-parser");
 var topics     =   require("./models/topics");
 var Player     =   require("./models/player");
+var FacebookPlayer = require("./models/facebookplayer");
 var dbFiller = require('./libs/database-filler.js');
-var Games     =   require("./models/games");
 var OnlineUsers   =   require("./models/onlineusers");
+
+var RandomChallengedGames     =   require("./models/randomchallengedgames");
+var FriendChallengedGames   =   require("./models/friendchallengedgames");
 var GameRequests   =   require("./models/gamerequests");
+
 var GamesAccepted   =   require("./models/gamesaccepted");
 var Friend    =   require("./models/friend");
+var QuestionsForFriendChallenge   =   require("./models/questionsforfriendchallenge");
 var mongoose    =   require("mongoose");
 var express = require('express');
 var morgan      =   require('morgan')
@@ -17,6 +22,7 @@ var app = express();
 var server = require('http').createServer(app);
 
 var io = require('socket.io')(server);
+
 //var port = process.env.PORT || 3100;
 //var mongoServiceName = process.env.DATABASE_SERVICE_NAME.toUpperCase();
 //var mongoHost = process.env[mongoServiceName + '_SERVICE_HOST'];
@@ -28,39 +34,64 @@ var mongoURL = 'mongodb://userD2E:X1wbDQLqUSD1ot4w@mongodb/sampledb';
 //var port = process.env.PORT || process.env.OPENSHIFT_NODEJS_PORT || 3100;
 var port = process.env.PORT || process.env.OPENSHIFT_NODEJS_PORT || 8080;
 var ip   = process.env.IP   || process.env.OPENSHIFT_NODEJS_IP || '0.0.0.0';
+
+var port = process.env.PORT || 3100;
+>>>>>>> 5c394c7b8bd066bf88c64eb93d79c2a82d4e7cce
 var passport = require('passport');
 var LocalStrategy = require('passport-local').Strategy;
+var FacebookStrategy = require('passport-facebook').Strategy;
 var async = require('async');
 var nodemailer = require('nodemailer');
 var router      =   express.Router();
-//mongoose.connect('mongodb://localhost:27017/swot');
+var mongoURL = 'mongodb://userD2E:X1wbDQLqUSD1ot4w@mongodb/sampledb';
 mongoose.connect(mongoURL);
 
 // Configure app to use validation system with our config (custom rules)
 var expressValidator = require('express-validator');
 var evConfig         = require('./libs/express-validator-config.js');
+
 app.use(expressValidator(evConfig));
 
 //Logging
 app.use(function(req, res, next) {
-res.header('Access-Control-Allow-Credentials', true);
-res.header('Access-Control-Allow-Origin', req.headers.origin);
-res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE');
-res.header('Access-Control-Allow-Headers', 'X-Requested-With, X-HTTP-Method-Override, Content-Type, Accept');
-if ('OPTIONS' == req.method) {
-     res.send(200);
- } else {
-     next();
- }
+    res.header('Access-Control-Allow-Credentials', true);
+    res.header('Access-Control-Allow-Origin', req.headers.origin);
+    res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE');
+    res.header('Access-Control-Allow-Headers', 'X-Requested-With, X-HTTP-Method-Override, Content-Type, Accept');
+    if ('OPTIONS' == req.method) {
+        res.send(200);
+    } else {
+        next();
+    }
 });
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({"extended" : false}));
+
+// parse application/x-www-form-urlencoded
+app.use(bodyParser.urlencoded({ extended: false }))
+// parse application/json
+app.use(bodyParser.json())
+// parse application/vnd.api+json as json
+app.use(bodyParser.json({ type: 'application/vnd.api+json' }))
+app.use(function (req, res, next) {
+  console.log("************************* REQUEST ************************* =  " )
+  console.log(req.body) // populated!
+  console.log("************************* REQUEST ************************* " )
+
+  next()
+})
 app.use(morgan('combined'))
 app.use(express.static(__dirname));
 
 //Passport
 
-passport.use(new LocalStrategy(function(username, password, done) {
+/*      done = function verified(err, user, info) {
+        if (err) { return self.error(err); }
+        if (!user) { return self.fail(info); }
+        self.success(user, info);
+  }*/
+passport.use(new LocalStrategy(function(username, password, done) { 
+    // burdaki username ve password /user/login in içindeki req'den geliyo.
+    console.log(" LocalStrategy username = " + username + " password = " + password + " done = " + done);
+   
     Player.findOne({ username: username }, function(err, user) {
         if (err) return done(err);
         if (!user) return done(null, false, { message: 'Incorrect username.' });
@@ -73,6 +104,60 @@ passport.use(new LocalStrategy(function(username, password, done) {
         });
     });
 }));
+
+passport.use(new FacebookStrategy({
+    clientID: '1301406996598081',
+    clientSecret: '265c7bf3e223e09773ce4b49225d4c54',
+    callbackURL: "http://localhost:3100/auth/facebook/callback"
+  },
+ 
+ // facebook will send back the token and profile 
+  function(token, refreshToken, profile, done) {
+
+        // asynchronous
+        process.nextTick(function() {
+
+            // find the user in the database based on their facebook id
+            FacebookPlayer.findOne({ 'facebookId' : profile.id }, function(err, user) {
+
+                // if there is an error, stop everything and return that
+                // ie an error connecting to the database
+                if (err)
+                    return done(err);
+
+                // if the user is found, then log them in
+                if (user) {
+                     console.log("FACEBOOK KULANICI KAYDI IF İÇİ USER = " + user + " DONE = " + done);
+                    return done(null, user); // user found, return that user
+                } 
+               // if there is no user found with that facebook id, create them               
+                else { 
+                    console.log("FACEBOOK KULANICI KAYDI ELSE İÇİ " + JSON.stringify(profile));
+                    var newFacebookUser = new FacebookPlayer({
+                        facebookId    : profile.id,
+                        facebookName  : profile.displayName,
+                        facebookToken : token
+                    });
+
+                    console.log("facebookId = " + profile.id + " facebookToken = " + token + " facebookName = " + profile.displayName);
+
+                    // save our user to the database
+                    newFacebookUser.save(function(err) {
+                        if (err){
+                            console.log("Errrorrrrr " + err);
+                            throw err;
+                        }
+                        // if successful, return the new user
+                         else{
+                          console.log("newUser save else içi newUser = " + newFacebookUser);
+                          return done(null, newFacebookUser);
+                         }
+                    });
+                }
+            });
+        });
+    }
+));
 
 passport.serializeUser(function(user, done) {
     done(null, user.id);
@@ -89,6 +174,173 @@ app.use(passport.session());
 app.use('/',router);
 //************************************** OZAN 0 BİTİŞ ****************************** 
 
+ // =====================================
+ // FACEBOOK ROUTES =====================
+ // =====================================
+    
+// route for facebook authentication and login
+// If your application needs extended permissions, they can be requested by setting the scope option.
+// Multiple permissions can be specified as an array.  { scope: ['read_stream', 'publish_actions'] }
+
+router.route('/auth/facebook').get(passport.authenticate('facebook'));
+
+// handle the callback after facebook has authenticated the user. Normalde aşağıdaki gibiydi ben değiştirdim.
+
+router.route('/auth/facebook/callback').get(passport.authenticate('facebook', 
+    { successRedirect: '/',
+      failureRedirect: '/login' }));
+
+/*
+router.route('/auth/facebook/callback').get( 
+      passport.authenticate('facebook', function(err, user){
+            // function(err, user) ekleyerek FacebookStrategy'nin, done() ile yolladıklarını
+            // alabiliyoruz. Normalde function(err, user) yoktu ben ekledim
+            console.log("WWWWWWWWW + " + user ); 
+            // bu user FacebookStrategy'nin done'ından geliyor.
+            if (err){ 
+                console.log(err);
+                return next(err);
+            }
+            if(user){
+                console.log(" USER if içi user = " + user);
+                // return res.json({ err_code: 0, message: "login success"});                
+            }
+        })
+   // }
+);
+*/
+// Login
+
+/*
+    next = function next(err) {
+        if (err && err === 'route') {
+        return done();
+        }
+        var layer = stack[idx++];
+        if (!layer) {
+        return done(err);
+        }
+        if (layer.method && layer.method !== method) {
+        return next(err);
+        }
+        if (err) {
+        layer.handle_error(err, req, res, next);
+        } else {
+        layer.handle_request(req, res, next);
+        }
+    }
+************************* REQUEST ************************* =  
+    { username: 'vcvc', password: '44' }
+************************* REQUEST ************************* */
+
+router.route("/user/login")
+    .post(function (req, res, next) { 
+        console.log(" /user/login req = " + (req) + " res = " +(res) + " next = " + next);
+
+        passport.authenticate('local', function (err, user, info) { 
+            // bu (err, user, info), passport.use daki done()'dan gelen değerler.
+            // done aslında diğer fonk.lardaki callback parametresi gibi oluyo ama değil.
+           
+            console.log("/user/login ERR = ," + err + " USER = ," + user + " info = " + JSON.stringify(info));
+           
+            // örnek: return done(null, false, { message: 'Incorrect password.' }); için print şöyle oluyor:
+            // /user/login ERR = null, USER = false, info = {"message":"Incorrect password."}
+            
+            if (err) 
+                return next(err)
+            
+            if (!user) {
+                return res.json({ err_code: 1, message: "wrong password or username" })
+            }
+            req.logIn(user, function (err) {
+                if (err) 
+                    return next(err);
+				
+                console.log("SUCCES LOGIN");
+                return res.json({ err_code: 0, message: "login success", userid: user._id, username: user.username });
+            });
+        })(req, res, next);   
+})
+//Register
+router.route("/user/register")
+    .post(function (req, res) {
+        var user = new Player({
+            username: req.body.username,
+            email: req.body.email,
+            password: req.body.password
+        });
+		
+		console.log("USERNAME  ---> "  +  req.body.username);
+
+        user.save(function (err) {
+            if (err) {
+                if (err.errmsg.match(/username_1/)) {
+                    return res.json({ err_code: 1, message: "username already exists" });
+                }
+                if (err.errmsg.match(/email_1/)) {
+                    return res.json({ err_code: 2, message: "email already registered" });
+                }
+                return res.json({ err_code: err.code, message: err.errmsg });
+            } 
+            else {
+                req.logIn(user, function (err) {
+                    res.json({ err_code: 0, message: "signup success",  userid: user._id });
+                });
+            }
+        });
+      })
+//FACEBOOK Register
+router.route("/user/register/facebook")
+    .post(function (req, res) {
+
+        console.log("/user/register/facebook a girdi");
+		console.log("USERNAME  ---> "  +  req.body.name + " ID ----> " + req.body.id ); 
+       
+         FacebookPlayer.findOne({ 'facebookId' : req.body.id }, function(err, user) {       
+            if (err)
+                return done(err);
+
+                // if the user is found, then log them in
+            if (user) {
+                console.log("FACEBOOK KULANICI KAYDI IF İÇİ USER = " + user + " user._id = " + user._id);
+                return res.json({ err_code: 0, message: "login success", userid: user._id, username: req.body.name });
+
+                //return done(null, user); // user found, return that user
+            } 
+            else{
+              //  var facebookId = req.body.id;
+              //  var idToString = facebookId.toString();
+                var facebookUser = new FacebookPlayer({
+                    username: req.body.name,
+                    facebookId: req.body.id
+                    // email: req.body.email,
+                });
+		
+                facebookUser.save(function (err) {
+                    if (err) {
+                        return res.json({ err_code: err.code, message: err.errmsg });
+                    } 
+                    else {
+                        res.json({ err_code: 0, message: "signup success",  userid: user._id, username: req.body.name });
+                        console.log("Facebookplayer saved !!!")
+                    /*   
+                        req.logIn(facebookUser, function (err) {
+                                res.json({ err_code: 0, message: "signup success",  userid: req.body.id });
+                            });
+                    */
+                    }
+                });
+            }
+        })
+    })      
+
+router.route("/user/logout")
+    .post(function (req, res) {
+        req.logout();
+        res.json({ err_code: 0, message: "logout success" });
+    })
+
+
 server.listen(port, function () {
   console.log('Server HIHIHIH listening at port %d', port);
 });
@@ -98,20 +350,20 @@ var theRoom = {
              numUsers:0
 };
 
-var availableRoomArray;
-var availableRoomArray_575e798ca02edd940875a65a = [];
-var availableRoomArray_575e79a8a02edd940875a65b = [];
-var availableRoomArray_575fe940a02edd940875db89 = [];
-var availableRoomArray_5762564aa02edd940876305d = [];
+var roomObject;
+var roomObject_575e798ca02edd940875a65a = [];
+var roomObject_575e79a8a02edd940875a65b = [];
+var roomObject_575fe940a02edd940875db89 = [];
+var roomObject_5762564aa02edd940876305d = [];
 
-var availableRoomArray_5763f85ca02edd9408766a27 = [];
-var availableRoomArray_57678127a02edd940876ec0f = [];
-var availableRoomArray_5767b67da02edd940877394e = [];
-var availableRoomArray_5768f629a02edd9408774101 = [];
-var availableRoomArray_576edfde1a46fbcd0719e0fa = [];
-var availableRoomArray_576f8de91a46fbcd071a0b2a = [];
-var availableRoomArray_576fface1a46fbcd071a9dff = [];
-var availableRoomArray_5770dc681a46fbcd071b5617 = [];
+var roomObject_5763f85ca02edd9408766a27 = [];
+var roomObject_57678127a02edd940876ec0f = [];
+var roomObject_5767b67da02edd940877394e = [];
+var roomObject_5768f629a02edd9408774101 = [];
+var roomObject_576edfde1a46fbcd0719e0fa = [];
+var roomObject_576f8de91a46fbcd071a0b2a = [];
+var roomObject_576fface1a46fbcd071a9dff = [];
+var roomObject_5770dc681a46fbcd071b5617 = [];
 
 var allRoomsArray = [];
 var scoresArray = [];
@@ -136,16 +388,16 @@ function createScoresArray(){
             
 var index = 0;
 
-function emptyavailableRoomArray(availableRoomArray){
+function emptyroomObject(roomObject){
 
-    if(availableRoomArray[0].numUsers == 3){
-        console.log("emptyavailableRoomArray IF İÇİ num of users = " + availableRoomArray[0].numUsers);
-        availableRoomArray = [];
-        console.log("emptyavailableRoomArray IF İÇİ num of users = " + availableRoomArray.length);
+    if(roomObject[0].numUsers == 3){
+        console.log("emptyroomObject IF İÇİ num of users = " + roomObject[0].numUsers);
+        roomObject = [];
+        console.log("emptyroomObject IF İÇİ num of users = " + roomObject.length);
     }
-    console.log("emptyavailableRoomArray IF DIŞI num of users = " + availableRoomArray.length);
+    console.log("emptyroomObject IF DIŞI num of users = " + roomObject.length);
 
-    return availableRoomArray;
+    return roomObject;
 }
 
 function getQuestionsByCategory(categoryId,qnumber, callback){
@@ -171,12 +423,14 @@ function getCategoryByUser(callback)
     });
 };
 
-function isGameExistWusername(username, gamename, categoryid , callback)
+function isGameExistWusername(username, gamename, categoryid, callback)
 {
-    Games.find({'username' : username , 'gamename' : gamename , 'categoryid' : categoryid}, function(err, game) {
+    RandomChallengedGames.find({'username' : username , 'gamename' : gamename , 'categoryid' : categoryid}, function(err, game) {
         if (err) {
+            console.log("isGameExistWusername ERROR" + err);
             callback(err, null);
-        } else {
+        } else {            
+            console.log("isGameExistWusername ELSE" + game);
             callback(null, game);
         }
     });
@@ -185,28 +439,172 @@ function isGameExistWusername(username, gamename, categoryid , callback)
 
 function isGameExist(gamename, categoryid , callback)
 {
-    Games.find({'gamename' : gamename , 'categoryid' : categoryid}, function(err, game) {
+    RandomChallengedGames.find({'gamename' : gamename , 'categoryid' : categoryid}, function(err, game) {
         if (err) {
             callback(err, null);
         } else {
             callback(null, game);
         }
     });
-
 }
 
-function findAllGamesWUsername(username, callback)
+function isClientInOngoingPlayInCategory(myuserid, categoryId, callback)
 {
-    Games.find({'username' : username }, function(err, games) {
+    var userid = myuserid;
+    var num = 0;
+    console.log("IsClientInOngoingPlayInCategory userid = " + userid + " " + categoryId);
+
+    RandomChallengedGames.find({usersThatDidntDeleteGame : userid, 'categoryid' : categoryId, 'completed': 0 }, function(err, game) {
+        if (err) {
+          callback(err, null);
+        } 
+        else { 
+          console.log(" else içi game = " + game[0]);  
+          callback(null, game[0]);
+        }
+    });
+}
+
+function findRandomChallengedGameWRoomId(roomid, currentTimeInSeconds, callback)
+{
+    console.log("findRandomChallengedGameWRoomId içi roomid =  " + roomid + " " + currentTimeInSeconds);
+
+    RandomChallengedGames.find({'roomId' : roomid, 'currentTimeInSeconds' : currentTimeInSeconds}, function(err, game) {
+        if (err) {
+            console.log("findRandomChallengedGameWRoomId IF içi game =  " + err);           
+            callback(err, null);
+        } else {
+            console.log("findRandomChallengedGameWRoomId ELSE içi game =  " + game[0] + " --- " + game );
+            callback(null, game[0]);
+        }
+    });
+}
+
+function findRandomChallengedGamesWUsername(myuserId, callback)
+{
+/*    RandomChallengedGames.find({'username' : username}, function(err, games) {
+        if (err) {
+            callback(err, null);
+        } else {
+            console.log("findRandomChallengedGamesWUsername içi = " + games);
+            callback(null, games);
+        }
+    });*/
+    var userId = myuserId;    
+    RandomChallengedGames.find({usersThatDidntDeleteGame : userId}, function(err, games) {
         if (err) {
             callback(err, null);
         } else {
             callback(null, games);
         }
     });
-
+}
+function findFriendChallengedGameHistoryWUsername(myuserId, callback)
+{   console.log("findFriendChallengedGameHistoryWUsername myuserId = " + myuserId)
+    var userId = myuserId;
+    FriendChallengedGames.find({usersThatDidntDeleteGame : userId}, function(err, games) {
+        if (err) {
+            callback(err, null);
+        } else {
+            callback(null, games);
+        }
+    });
 }
 
+function deleteUserFromRandomChallengedSchema(currentTimeInSeconds, roomid, useridtobedeleted, callback)//Friend challengellar için
+{
+    var count = 0;  
+    var array = [];
+    var response = {"message" : "Silindi"};
+
+    console.log("deleteUserFromRandomChallengedSchema içi currentTimeInSeconds = " + currentTimeInSeconds + " roomid = " + roomid + " useridtobedeleted = " + useridtobedeleted);        
+
+
+    RandomChallengedGames.findOne({'currentTimeInSeconds': currentTimeInSeconds, 'roomId' : roomid}, function(err, game){
+        
+          console.log("deleteUserFromRandomChallengedSchema game = " + game);
+          console.log(" game[0] = " + game[0]);        
+          
+          var index = game.usersThatDidntDeleteGame.indexOf(useridtobedeleted);
+          console.log("INDEX = " + index);    
+          if (index !== -1) {
+                game.usersThatDidntDeleteGame.splice(index, 1);   //The first parameter (0) defines the position where new elements should be added (spliced in).
+                                          //The second parameter (1) defines how many elements should be removed.
+                                          //The rest of the parameters are omitted. No new elements will be added.
+                callback(null, response);
+          }
+          game.save(function(err){
+           if (err) throw err;
+          }); 
+
+          if (err) 
+            callback(err, null);          
+    })
+
+    /*if(game.usersThatDidntDeleteGame.length == 0)
+        game.remove().exec();*/
+}
+function deleteUserFromFriendChallengedSchema(currentTimeInSeconds, invitingusrid,invitedusrid,categoryid,useridtobedeleted, callback)//Friend challengellar için
+{
+    var response = {"message" : "Silindi"};
+
+    FriendChallengedGames.findOne({'currentTimeInSeconds': currentTimeInSeconds,'invitinguserid' : invitingusrid , 'inviteduserid' : invitedusrid, 'categoryid' : categoryid}, function(err, game){
+          console.log("deleteUserFromFriendChallengedSchema game = " + game);
+
+          var index = game.usersThatDidntDeleteGame.indexOf(useridtobedeleted); 
+          console.log("INDEX = " + index);
+          if (index !== -1) {
+            game.usersThatDidntDeleteGame.splice(index, 1);//The first parameter (0) defines the position where new elements should be added (spliced in).
+                                          //The second parameter (1) defines how many elements should be removed.
+                                          //The rest of the parameters are omitted. No new elements will be added.
+            console.log("SİLİNDİ");
+            callback(null, response);
+          }
+
+          if(game.usersThatDidntDeleteGame.length != 0){
+                game.save(function(err){
+                if (err) throw err;
+                });
+          }          
+
+          if (err) 
+            callback(err, null);  
+
+          if(game.usersThatDidntDeleteGame.length == 0)
+             game.remove();             
+    })   
+}
+
+function deleteUserFromGameRequestSchema(currentTimeInSeconds, invitingusrid,invitedusrid,categoryid,useridtobedeleted, callback){
+ // anasayfasında bu oyunu artık kayıtta tutmayan inviteduser ı silme işi.   
+  
+    var response = {"message" : "Silindi"};
+
+    console.log("currentTimeInSeconds " + currentTimeInSeconds + " invitingusrid " 
+        + invitingusrid + " invitedusrid " + invitedusrid + " categoryid " + categoryid + " useridtobedeleted " + useridtobedeleted )
+    
+    GameRequests.findOne({'currentTimeInSeconds': currentTimeInSeconds,'invitinguserid' : invitingusrid , 'inviteduserid' : invitedusrid, 'categoryid' : categoryid}, function(err, game){            
+
+        console.log("deleteUserFromGameRequestSchema game = " + game);
+        if(game!=null){
+            var index = game.usersThatDidntDeleteGame.indexOf(useridtobedeleted);    
+            
+            if (index !== -1) {
+                game.usersThatDidntDeleteGame.splice(index, 1);  
+                callback(null, response); 
+            }
+            if(game.usersThatDidntDeleteGame.length != 0){
+                game.save(function(err){
+                    if (err) throw err;
+                }); 
+            }              
+            if(game.usersThatDidntDeleteGame.length == 0)
+                game.remove();
+            if (err) 
+                callback(err, null);        
+        }
+    })
+}  
 function getUserInfoByName(username, callback)
 {
     Player.find({'username' : username}, function(err, userInfo) {
@@ -243,39 +641,9 @@ function insertOnlineUserList(username , userid , mysocketid)
 
         console.log('User ' + username+ ' is created wtih socket id ' + mysocketid);
     });
-
 }
 
-function deleteOnlineUserList(mysocketid)
-{
-    OnlineUsers.find({ 'socketid':mysocketid }).remove().exec();
-    console.log('Socket number ' + mysocketid + ' is removed from list');
-}
-
-function insertGameRequest(myinvitingusername , myinvitedusername , mycategoryid, mycategoryname)
-{
-    var curTimeInSeconds = Math.round(new Date().getTime()/1000);
-    var timeoutValue = 3600;
-
-    var newGameRequest = GameRequests({
-        invitingusername : myinvitingusername,
-        invitedusername : myinvitedusername,
-        categoryid: mycategoryid , 
-        categoryname : mycategoryname,
-        currentTime : curTimeInSeconds,
-        timeoutTime : curTimeInSeconds + timeoutValue 
-    });
-
-    newGameRequest.save(function(err)
-    {
-        if (err) throw err;
-
-        console.log('Game request with Inviting User ' + myinvitingusername + ' Invited user ' + myinvitedusername + ' is created for category ' + mycategoryid);
-    });
-
-}
-
-function getCategoryInfoByCategoryId(myinvitingusername , myinvitedusername ,mycategoryid, callback)
+function getCategoryInfoByCategoryId(myinvitingusername , myinvitedusername ,mycategoryid, mycategorydata, callback)
 {
     topics.find({'_id' : mycategoryid}, function(err, categoryInfo) {
         if (err) {
@@ -286,56 +654,186 @@ function getCategoryInfoByCategoryId(myinvitingusername , myinvitedusername ,myc
     });
 };
 
-function insertGamesAccepted(myinvitingusername , myinvitedusername , mycategoryid, mycategoryname , questiondata, gamecontentarray)
+function deleteOnlineUserList(mysocketid)
 {
+    OnlineUsers.find({ 'socketid':mysocketid }).remove().exec();
+    console.log('Socket number ' + mysocketid + ' is removed from list');
+}
 
-    var newGameRequest = GamesAccepted({
-        invitingusername : myinvitingusername,
-        invitedusername : myinvitedusername,
-        categoryid: mycategoryid,
-        categoryname :  mycategoryname,
-        questions : questiondata,
-        gameContent : gamecontentarray
+function updateGameScoreInfo(currentTimeInSeconds, invitinguserid , inviteduserid, gamereqcategoryid, infoForRankings, callback)
+{
+    console.log("currentTimeInSeconds " + currentTimeInSeconds + "invitinguserid ---> " + invitinguserid  + "  inviteduserid ---> " + inviteduserid + "  categoryid ---> " + gamereqcategoryid);
+    
+    GameRequests.findOne({'currentTimeInSeconds': currentTimeInSeconds, 'invitinguserid' : invitinguserid , 'inviteduserid' : inviteduserid, 'categoryid' : gamereqcategoryid}, function (err, gamerequest){ 
+
+        if (err) { 
+            console.log("updateGameScoreInfo GameRequests IF İÇİ")
+            callback(err, null);
+        } 
+        else if(gamerequest != null){            
+            console.log("updateGameScoreInfo GameRequests ELSE İÇİ game değerleri = " + gamerequest);
+            gamerequest.scoreArrayForChallengeRank.push(infoForRankings);
+            //gamerequest.usersThatDidntDeleteGame.push(infoForRankings.updaterUsername);
+
+            if(gamerequest.scoreArrayForChallengeRank.length==2)
+                gamerequest.completed=1;
+            else
+                gamerequest.completed=0;
+                
+            gamerequest.save(function (err) {
+                if(err) 
+                {
+                    console.error('SAVE ERROR!');
+                }
+            });
+            console.log("Server.js updateGameScoreInfo GameRequests scores are updated...." + 
+               " game.scoreArrayForChallengeRank = " + gamerequest.scoreArrayForChallengeRank );
+            callback(null, gamerequest.scoreArrayForChallengeRank);            
+        }   
     });
 
-    newGameRequest.save(function(err)
-    {
-        if (err) throw err;
+    FriendChallengedGames.findOne({'currentTimeInSeconds': currentTimeInSeconds, 'invitinguserid' : invitinguserid, 'inviteduserid' : inviteduserid, 'categoryid' : gamereqcategoryid}, function (err, game){ 
 
-        console.log('Accepted Game with Inviting User ' + myinvitingusername + ' Invited user ' + myinvitedusername + ' is created for category ' + mycategoryid);
+        if (err) { 
+            console.log("updateGameScoreInfo IF İÇİ")
+            callback(err, null);
+        } 
+        else if(game != null){            
+            console.log("updateGameScoreInfo FriendChallengedGames ELSE İÇİ game değerleri = " + game);
+            game.scoreArrayForChallengeRank.push(infoForRankings);
+            //gamerequest.usersThatDidntDeleteGame.push(infoForRankings.updaterUsername);
+
+            if(game.scoreArrayForChallengeRank.length==2)
+                game.completed=1;
+            else
+                game.completed=0;
+                
+            game.save(function (err) {
+                if(err) 
+                {
+                    console.error('SAVE ERROR!');
+                }
+            });
+            console.log("Server.js updateGameScoreInfo FriendChallengedGames scores are updated...." + 
+               " game.scoreArrayForChallengeRank = " + game.scoreArrayForChallengeRank );
+            callback(null, game.scoreArrayForChallengeRank);            
+        }   
     });
+}
 
+function updateQuestionsGameRequestInfo(myinvitingusername , myinvitedusername , mycategoryid, questiondata)
+{
+    console.log("invitingusername ---> " + myinvitingusername + "  invitedusername ---> " + myinvitedusername + "  categoryid ---> " + mycategoryid);
+    FriendChallengedGames.findOne({'currentTimeInSeconds': currentTimeInSeconds, 'invitingusername' : myinvitingusername , 'invitedusername' : myinvitedusername, 'categoryid' : mycategoryid}, function (err, myrecord){
+        console.log("UPDATEQUESTIONSGAMEONFOOOOO **********  " + JSON.stringify(questiondata));
+        if(myrecord !== null && myrecord !== undefined)
+        {
+            myrecord.questions = questiondata;
+            myrecord.save(function (err) {
+                    if(err) 
+                    {
+                        console.error('ERROR!');
+                    }
+                });
+            console.log("Server.js updateQuestionsGameRequestInfo questions are updated....");
+        }
+        else
+        {
+            console.log("Couldnt find a record to update questions field......");
+        }
+    });
 };
 
-
-function insertGamesFromGameRequests(iscompleted , mycategoryname ,mycategoryid, myinvitingusername, myinvitedusername ,  mygamecontent, mytimeout)
+function insertGamesFromGameRequests(mycurrentTimeInSeconds, myinvitingusername, myinvitedusername, myinvitinguserid, myinviteduserid, mycategoryid, mycategoryname, mytimeouttime, myisexpired, scoreInfoArray, mycompleted, myisCurrentViewerDeletedDiv)
 {
+   // console.log(" insertGamesFromGameRequests'e GİRDİ scoreArray = " + scoreInfoArray)
+   
+    var scoreInfoObjectForChallengeRanking = {userScore : 0,
+                                           userTime : 0,
+                                           username : ''    }
+    //var scoreInfoArray = [];
 
-    var newGame = Games({
-        completed : iscompleted,
-        categoryname :  mycategoryname,
-        categoryid: mycategoryid,
-        gamename : myinvitingusername,
-        username : myinvitingusername,
-        gameContent : mygamecontent,
-        timeoutTime : mytimeout
+    var mytimeouttime = mytimeouttime + 120; // Adam oyunu kabul ettikten sonra timeout time a ek süre ekliyoz.
+
+    var newGame = FriendChallengedGames({
+        currentTimeInSeconds: mycurrentTimeInSeconds, 
+        invitingusername : myinvitingusername,
+        invitedusername : myinvitedusername,
+        invitinguserid : myinvitinguserid,
+        inviteduserid : myinviteduserid,
+        categoryid: mycategoryid, 
+        categoryname : mycategoryname,
+        timeoutTime : mytimeouttime,
+        isExpired : myisexpired,
+        scoreArrayForChallengeRank: scoreInfoArray,
+        completed: mycompleted,
+        isCurrentViewerDeletedDiv: myisCurrentViewerDeletedDiv
     });
+    newGame.usersThatDidntDeleteGame.push(myinvitinguserid);    
+    newGame.usersThatDidntDeleteGame.push(myinviteduserid);
 
     newGame.save(function(err)
     {
         if (err) throw err;
-
-        console.log('New Game inserted');
+        console.log('New FriendChallengedGames is created ' + mycurrentTimeInSeconds + ' ' + myinvitingusername + ' Invited user ' + myinvitedusername + ' category ' + mycategoryid);
     });
 
-};
+    console.log("FriendChallengedGames newGame = " + newGame)
 
+}
 
-
-
-function getGameRequestInfo(myinvitingusername , myinvitedusername , mycategoryid, callback)
+function insertGameRequest(mycurrentTimeInSeconds, myinvitingusername, myinvitedusername, myinvitinguserid, myinviteduserid, mycategoryid, mycategoryname, myisexpired, mycompleted, myisdeclined, myisCurrentViewerDeletedDiv, callback)
 {
-    GameRequests.find({'invitingusername' : myinvitingusername , 'invitedusername' : myinvitedusername, 'categoryid' : mycategoryid}, function(err, gamerequestInfo) {
+    console.log(" insertGameRequest'e GİRDİ currentTimeInSeconds = " + mycurrentTimeInSeconds + " myinvitinguserid = " + myinvitinguserid + " myinviteduserid = " + myinviteduserid)
+
+   // var curTimeInSeconds = Math.round(new Date().getTime()/1000);
+    var timeoutValue = 60;
+
+    var scoreInfoObjectForChallengeRanking = {userScore : 0,
+                                           userTime : 0,
+                                           username : ''    }
+    var scoreInfoArray = [];
+ //   scoreInfoArray.push(scoreInfoObjectForChallengeRanking);
+
+    var newGameRequest = GameRequests({
+        currentTimeInSeconds : mycurrentTimeInSeconds,
+        invitingusername : myinvitingusername,
+        invitedusername : myinvitedusername,
+        invitinguserid : myinvitinguserid,
+        inviteduserid : myinviteduserid, 
+        categoryid : mycategoryid, 
+        categoryname : mycategoryname,
+       // questions : myquestiondata,
+        timeoutTime : mycurrentTimeInSeconds + timeoutValue,
+        isExpired : myisexpired,
+        completed: mycompleted,
+        isDeclined: myisdeclined,
+        isCurrentViewerDeletedDiv: myisCurrentViewerDeletedDiv
+
+      //  scoreArrayForChallengeRank: scoreInfoArray
+    });
+    console.log("insertGameRequest içi newGameRequest = " + newGameRequest)
+    newGameRequest.usersThatDidntDeleteGame.push(myinvitinguserid);
+    newGameRequest.usersThatDidntDeleteGame.push(myinviteduserid);
+    console.log("insertGameRequest içi newGameRequest 2 = " + newGameRequest)
+
+    newGameRequest.save(function(err)
+    {
+        if (err){
+           console.log("ERR = " + err);
+          callback(err,null)
+        } 
+        console.log('Game request inserted and gamerequest = ' + newGameRequest);
+    });
+
+    callback(null, newGameRequest);
+}
+
+function getGameRequestInfo(mycurrentTimeInSeconds, myinvitinguserid , myinviteduserid , mycategoryid, callback)
+{
+    console.log(" getGameRequestInfo'e GİRDİ currentTimeInSeconds = " + mycurrentTimeInSeconds);
+
+    GameRequests.find({'currentTimeInSeconds': mycurrentTimeInSeconds,'invitinguserid' : myinvitinguserid , 'inviteduserid' : myinviteduserid, 'categoryid' : mycategoryid}, function(err, gamerequestInfo) {
         if (err) {
             callback(err, null);
         } else {
@@ -343,70 +841,201 @@ function getGameRequestInfo(myinvitingusername , myinvitedusername , mycategoryi
         }
     });
 };
+
+function setFriendChallengeQuestions(mycurrentTimeInSeconds, myinvitinguserid , myinviteduserid , mycategoryid, mycategoryname, myquestiondata, callback)
+{
+    console.log(" setFriendChallengeQuestions'e GİRDİ currentTimeInSeconds = " + mycurrentTimeInSeconds);
+
+    var timeoutValue = 60;
+
+    var newGameQuestions = QuestionsForFriendChallenge({
+        currentTimeInSeconds: mycurrentTimeInSeconds,
+        invitinguserid : myinvitinguserid,
+        inviteduserid : myinviteduserid,
+        categoryid: mycategoryid, 
+        categoryname : mycategoryname,
+        questions : myquestiondata,
+        //currentTime : curTimeInSeconds,
+        timeoutTime : mycurrentTimeInSeconds + timeoutValue,
+    });
+
+    newGameQuestions.save(function(err)
+    {
+        if (err){
+          throw err;
+          callback(err,null)
+        } 
+        console.log("setFriendChallengeQuestions SAVED");
+    });
+    
+    callback(null, newGameQuestions);
+};
+
+function getFriendChallengeQuestions(mycurrenttimeinseconds, myinvitinguserid, myinviteduserid , mycategoryid, callback)
+{
+    console.log(" getFriendChallengeQuestions'e GİRDİ currentTimeInSeconds = " + mycurrenttimeinseconds);
+
+    QuestionsForFriendChallenge.find({'currentTimeInSeconds': mycurrenttimeinseconds,'invitinguserid' : myinvitinguserid , 'inviteduserid' : myinviteduserid, 'categoryid' : mycategoryid}, function(err, questions) {
+        if (err) {
+            callback(err, null);
+        } else {
+            callback(null, questions[0]);
+        }
+    });
+};
+
+function getGameRequestListForUserId(myuserId , callback)
+{
+    console.log("getGameRequestListForUserId içi userID = " + myuserId);
+    var array = [];
+    var userId = myuserId;
+
+    GameRequests.find({usersThatDidntDeleteGame : userId}, function(err, game) {
+     if (err) {
+        callback(err, null);
+     }
+     else {
+        console.log("getGameRequestListForUsername requestListForUsername = " + JSON.stringify(game));
+        array.push(game);
+
+           /* requestListForUsername.forEach(function(){
+                count++;
+                console.log("getGameRequestListForUsername COUNT = " + count);
+                //callback(null, requestListForUsername);
+                array.push(requestListForUsername);
+            });*/   
+/*
+      * Performs the specified action for each element in an array.
+      * @param callbackfn  A function that accepts up to three arguments. forEach calls the callbackfn function one time for each element in the array.
+      * @param thisArg  An object to which the this keyword can refer in the callbackfn function. If thisArg is omitted, undefined is used as the this value.
+      */
+ //   forEach(callbackfn: (value: T, index: number, array: T[]) => void, thisArg?: any): void;
+     
+        callback(null, array);
+        }
+    });
+};
+
+// function getGameRequestListForUsername(myinvitedusername , callback)
+// {
+//     var count = 0;  
+//     var array = [];
+
+//     GameRequests.find({'invitedusername' : myinvitedusername}, function(err, requestListForUsername) {
+//         if (err) {
+//             callback(err, null);
+//         }
+//         else {
+//         // callback(null, requestListForUsername[0]); // ozan böyle yapmıştı o yüzden tek request geliyodu
+        
+//             console.log("getGameRequestListForUsername requestListForUsername.length SSSS = " + requestListForUsername.length);
+//             array.push(requestListForUsername);
+
+//            /* requestListForUsername.forEach(function(){
+//                 count++;
+//                 console.log("getGameRequestListForUsername COUNT = " + count);
+//                 //callback(null, requestListForUsername);
+//                 array.push(requestListForUsername);
+//             });*/
+//             callback(null, array);
+// /**
+//       * Performs the specified action for each element in an array.
+//       * @param callbackfn  A function that accepts up to three arguments. forEach calls the callbackfn function one time for each element in the array.
+//       * @param thisArg  An object to which the this keyword can refer in the callbackfn function. If thisArg is omitted, undefined is used as the this value.
+//       */
+//  //   forEach(callbackfn: (value: T, index: number, array: T[]) => void, thisArg?: any): void;
+
+//         }
+//     });
+// };
+
+// function getSentGameRequestListForUsername(myinvitingusername , callback)
+// {
+//     var array = [];
+
+//     GameRequests.find({'invitingusername' : myinvitingusername}, function(err, requestListForUsername) {
+//         if (err) {
+//             callback(err, null);
+//         }
+//         else {
+//             console.log("getSentGameRequestListForUsername requestListForUsername = " + JSON.stringify(requestListForUsername));
+//             array.push(requestListForUsername);
+
+//             callback(null, array);
+//         }
+//     });
+// };
+
+function deleteGameRequestInfo(mycurrenttimeinseconds, myinvitinguserid , myinviteduserid , mycategoryid)
+{
+    console.log('deleteGameRequestInfo e GİRDİ ' + mycurrenttimeinseconds + ' ' + myinvitinguserid + ' ' + myinviteduserid);
+
+    GameRequests.find({'currentTimeInSeconds': mycurrenttimeinseconds,'invitinguserid' : myinvitinguserid , 'inviteduserid' : myinviteduserid, 'categoryid' : mycategoryid}).remove().exec();
+    console.log('Requested GameRequestInfo is removed from list SSSSSSSSSSSSSSSSSS');
+};
+
+function checkGameRequestsTimeouts(mycurrenttimeinseconds)
+{
+    GameRequests.find({'timeoutTime' : {$lte : mycurrenttimeinseconds, $ne: null} },function(err,gamerequest) {       
+        
+        console.log("checkGameRequestsTimeouts = " + mycurrenttimeinseconds);
+        console.log("function checkGameRequestsTimeouts içi games = " + gamerequest[0])
+        
+        for(i=0; i<gamerequest.length; i++){
+            gamerequest[i].isExpired = true; 
+            gamerequest[i].save(function(err)
+            {
+                if (err) throw err;
+            });     
+        }
+    });
+};
+
+function checkFriendChallegedTimeoutGames(mycurrenttimeinseconds)
+{
+    FriendChallengedGames.find({'timeoutTime' : {$lte : mycurrenttimeinseconds, $ne: null} },function(err,games) {
+        if (err) {
+            callback(err, null);
+        } else {
+            console.log("function check FriendChallegedTimeoutGames içi games = " + games.length)
+            for(i=0; i<games.length; i++){
+                games[i].isExpired = true;  
+                console.log("function checkFriendChallegedTimeoutGames for içi games[i] = " + games[i]);
+            }
+        }
+        
+    });
+};
+
+function deleteRandomChallegedTimeoutGames(mycurrenttimeinseconds)
+{
+    RandomChallengedGames.find({'timeoutTime' : { $lte : mycurrenttimeinseconds , $ne: null}}).remove().exec();
+    console.log('deleteRandomChallegedTimeoutGames Game is removed from list ');
+};
+
 
 function getGamesAcceptedInfo(myinvitingusername , myinvitedusername , mycategoryid, callback)
 {
     GamesAccepted.find({'invitingusername' : myinvitingusername , 'invitedusername' : myinvitedusername, 'categoryid' : mycategoryid}, function(err, gamerequestInfo) {
-        if (err) {
+        if (err) { 
+            console.log("getGamesAcceptedInfo IF İÇİ")
             callback(err, null);
         } else {
+            console.log("getGamesAcceptedInfo ELSE İÇİ " + gamerequestInfo[0])
             callback(null, gamerequestInfo[0]);
         }
     });
 };
 
-function getGameRequestListForUsername(myinvitedusername , callback)
+function getAcceptedGameScoreInfoByUsername(myinvitingusername , myinvitedusername , mycategoryid, myupdateusername, callback)
 {
-    GameRequests.find({'invitedusername' : myinvitedusername}, function(err, requestListForUsername) {
+    GamesAccepted.find({'invitingusername' : myinvitingusername , 'invitedusername' : myinvitedusername, 'categoryid' : mycategoryid}, function(err, data) {
         if (err) {
             callback(err, null);
         } else {
-            callback(null, requestListForUsername[0]);
+            callback(null, data[0]);
         }
     });
-};
-
-String.prototype.toObjectId = function() {
-  var ObjectId = (require('mongoose').Types.ObjectId);
-  return new ObjectId(this.toString());
-};
-
-
-
-
-function updateQuestıonsGameRequestInfo(myinvitingusername , myinvitedusername , mycategoryid, questiondata)
-{
-    console.log("updateQuestıonsGameRequestInfo ---- invitingusername ---> " + myinvitingusername + "  invitedusername ---> " + myinvitedusername + "  categoryid ---> " + mycategoryid);
-     var ObjectId = require('mongoose').Types.ObjectId;
-
-     myinvitingusername = myinvitingusername.replace(/\s+/g, '');
-     myinvitedusername = myinvitedusername.replace(/\s+/g, '');
-     
-
-    GameRequests.findOne({'invitingusername' : myinvitingusername , 'invitedusername' : myinvitedusername, 'categoryid' : mycategoryid.toObjectId()},   function (err, myrecord){
-        console.log("myrecord " + JSON.stringify(myrecord));
-	if (err) 
-        {
-	    return console.log("error: " + err);
-	}
-
-	if(myrecord === null || myrecord === undefined)
-	{
-	    console.log("The record doesnt exists or I couldn't find it......");
-	}
-	else
-	{
-		
-		console.log("UPDATEQUESTIONSGAMEONFOOOOO **********  " + JSON.stringify(questiondata));
-		myrecord.questions = questiondata;
-		myrecord.save();
-		console.log("Server.js updateQuestıonsGameRequestInfo questions are updated....");
-	}
-
-
-    });
-
-
 };
 
 function updateAcceptedGameScoreInfo(myinvitingusername , myinvitedusername , mycategoryid, myupdateusername, score)
@@ -426,29 +1055,6 @@ function updateAcceptedGameScoreInfo(myinvitingusername , myinvitedusername , my
 
         console.log("Score is updated....");
     });
-};
-
-function getAcceptedGameScoreInfoByUsername(myinvitingusername , myinvitedusername , mycategoryid, myupdateusername, callback)
-{
-    GamesAccepted.find({'invitingusername' : myinvitingusername , 'invitedusername' : myinvitedusername, 'categoryid' : mycategoryid}, function(err, data) {
-        if (err) {
-            callback(err, null);
-        } else {
-            callback(null, data[0]);
-        }
-    });
-};
-
-function deleteGameRequestInfo(myinvitingusername , myinvitedusername , mycategoryid, questiondata)
-{
-    GameRequests.find({'invitingusername' : myinvitingusername , 'invitedusername' : myinvitedusername, 'categoryid' : mycategoryid}).remove().exec();
-    console.log('Requested GameRequestInfo is removed from list');
-};
-
-function deleteTimeoutGames(mycurrenttimeinseconds)
-{
-    Games.find({'timeoutTime' : { $lte : mycurrenttimeinseconds , $ne: null}}).remove().exec();
-    console.log('Requested GameRequestInfo is removed from list');
 };
 
 // Will remove all falsy values: undefined, null, 0, false, NaN and "" (empty string)
@@ -493,8 +1099,12 @@ function _arrayRandom(len, min, max, unique) {
    return toReturn;
 }
 
-function getRoomId(availableRoomArray){
-    return availableRoomArray[0].roomId;
+function getRoomId(roomObject){
+    return roomObject[0].roomId;
+}
+
+function getRooomsCurrentTimeInSeconds(roomObject){
+    return roomObject[0].currentTimeInSeconds;
 }
 
 function getQuestions()
@@ -553,213 +1163,6 @@ function sortScoresArray(arrToSort){
     return arrToSort;
 
 }
-
-function handleScoreOnQuestions(socket, socketEntity, categoryId){
-      console.log("HANDLESCORE İÇİ socketEntity.username = " + socketEntity.username + " categoryId = " + categoryId);
-     
-       if(categoryId == '575e798ca02edd940875a65a')
-             availableRoomArray = availableRoomArray_575e798ca02edd940875a65a;
-       else if(categoryId == '575e79a8a02edd940875a65b')
-             availableRoomArray = availableRoomArray_575e79a8a02edd940875a65b;  
-       else if(categoryId == '575fe940a02edd940875db89')
-             availableRoomArray = availableRoomArray_575fe940a02edd940875db89;             
-        else if(categoryId == '5762564aa02edd940876305d')
-             availableRoomArray = availableRoomArray_5762564aa02edd940876305d;                                    
-       else if(categoryId == '5763f85ca02edd9408766a27')
-             availableRoomArray = availableRoomArray_5763f85ca02edd9408766a27;
-       else if(categoryId == '57678127a02edd940876ec0f')
-             availableRoomArray = availableRoomArray_57678127a02edd940876ec0f;        
-       else if(categoryId == '5767b67da02edd940877394e')
-             availableRoomArray = availableRoomArray_5767b67da02edd940877394e;
-       else if(categoryId == '5768f629a02edd9408774101')
-             availableRoomArray = availableRoomArray_5768f629a02edd9408774101;
-       else if(categoryId == '576edfde1a46fbcd0719e0fa')
-             availableRoomArray = availableRoomArray_576edfde1a46fbcd0719e0fa;
-       else if(categoryId == '576f8de91a46fbcd071a0b2a')
-             availableRoomArray = availableRoomArray_576f8de91a46fbcd071a0b2a;
-       else if(categoryId == '576fface1a46fbcd071a9dff')
-             availableRoomArray = availableRoomArray_576fface1a46fbcd071a9dff;
-       else if(categoryId == '5770dc681a46fbcd071b5617')
-             availableRoomArray = availableRoomArray_5770dc681a46fbcd071b5617;  
-
-        console.log("HANDLESCORE İÇİ availableRoomArray.length  = " + availableRoomArray.length);
-        console.log("HANDLESCORE İÇİ availableRoomArray.length  = " + availableRoomArray[0] +
-        " " + availableRoomArray[1]);
-                        
-        if(availableRoomArray.length == 0 ){ // There is NOT any availble room so yeni room yarat
-
-            console.log("There is NOT any availble room " + socketEntity.username);
-            
-            var theRoom = { 
-                roomId:socketEntity.username, // Burdaki roomid sadece username olmamalı çünkü aynı user birden fazla yarışma açabilir.
-                                         // Dolayısıyla roomid nin unique olması için client tarafından username yanında o andaki time ile gelmeli.
-                numUsers:0
-            }
-             socket.join(theRoom.roomId);
-             theRoom.numUsers++;
-             connectionIndx = theRoom.numUsers;
-
-             availableRoomArray.push(theRoom);
-
-           // console.log("socket.on(QUESTIONS) içi 0 " + " scoresArray.length = " +scoresArray.length + " index = " + index);
-             
-             scoresArray[index][0] = theRoom.roomId;   // ilk kolonu yani roomId kolonunu oluşturyoruz
-             index++;
-             scoresArray.push([]);
-
-           // console.log("socket.on(QUESTIONS) içi 1" + " " +scoresArray[0][0]);
-
-            var categoryNumber = socketEntity.categoryId;
-            console.log("CATEGORY ID   ********** " + categoryNumber );
-            var qNumber = 5;
-            var response = {};
-            getQuestionsByCategory(categoryNumber, qNumber, function(err, data) {
-            if (err)
-            {
-                console.log(err);
-                response = {"error" : true,"message" : "There is not any record"};
-            }
-            else if(data != null && (qNumber > 0))
-            {
-                var allQuestions = (data._doc).questions;
-                var numQuestions = (data._doc.questions).length;
-                var rndquestnumbers = new Array(qNumber);
-                var questionData = new Array(qNumber);
-                rndquestnumbers = _arrayRandom(qNumber, 0, numQuestions, true);
-                for (var i = 0; i < qNumber; i++)
-                {
-                    if(allQuestions != null && (qNumber <= numQuestions))
-                    {
-                        questionData[i] = allQuestions[rndquestnumbers[i]]._doc;
-                        response = {"error" : false,"message" : questionData};
-                    }
-                    else
-                    {
-                        response = {"error" : true,"message" : "Opps some parameter is wrong"};
-                    }
-                }
-            }
-            else
-            {
-                response = {"error" : true,"message" : "There is not any response"};
-            }
-                console.log(response);
-				console.log("questions emitten once");
-				console.log("***********************SORULAR**********************");
-				console.log(questionData);
-                console.log("***********************ROOM ID**********************");
-				console.log(socketEntity);
-                console.log("***********************CONNECTION INDEX**********************");
-				console.log(connectionIndx);
-	
-                questionsToSent = questionData;
-                availableRoomArray[1] = (questionsToSent);	
-                  io.to(theRoom.roomId).emit(categoryId, {
-                      questions: questionData,
-                      theRoomId: socketEntity.username,
-                      connectionIndex: connectionIndx 
-                });          
-        });             
-              function getCurrentQuestions(){
-                    return questionsToSent;
-              }
-
-            console.log("theRoom.roomId = " + theRoom.roomId  );
-            console.log("Num of Users = " + theRoom.numUsers );
-         }
-        
-        else {   // socketEntity.username !== theRoom.roomId ---> Kullanıcının kendi açtığı odaya 2. kere girmesini önlemek için               
-        
-          console.log("CATEGORY ID  ELSE !!!++ ********** " + categoryId );
-          
-          console.log("There is availble room " + socketEntity);
-
-          roomId = getRoomId(availableRoomArray);
-          socket.join(roomId);
-          console.log("There is availble room, room id is = " + roomId);
-
-          availableRoomArray[0].numUsers++;
-          connectionIndx = availableRoomArray[0].numUsers;
-          
-            console.log("Shows all the rooms " + io.sockets.adapter.rooms);
-            console.log("Num of Users 2 = " + availableRoomArray[0].numUsers);
-            console.log("theRoom.roomId 2 = " + availableRoomArray[0].roomId);
-
-        //  var currentQuestions = getCurrentQuestions();
-          currentQuestions = availableRoomArray[1];
-          console.log("ELSE CURRENT QUESTIONS = " + availableRoomArray[1]);
-
-          io.to(roomId).emit(categoryId, {
-                 questions: currentQuestions,
-                 theRoomId: roomId,
-                 connectionIndex: connectionIndx 
-          });   
-          
-         if(availableRoomArray[0].numUsers == 3){
-                availableRoomArray.pop();
-                availableRoomArray.pop();
-
-            }
-
-         // availableRoomArray = emptyavailableRoomArray(availableRoomArray);
-          console.log("There is availble room  = " + availableRoomArray.length);
-            
-        }
-}
-
-//*************************************** OZAN 1 START ***********************************
-
-//Register
-router.route("/user/register")
-    .post(function (req, res) {
-        var user = new Player({
-            username: req.body.username,
-            email: req.body.email,
-            password: req.body.password
-        });
-		
-		console.log("USERNAME  ---> "  +  req.body.username);
-
-        user.save(function (err) {
-            if (err) {
-                if (err.errmsg.match(/username_1/)) {
-                    return res.json({ err_code: 1, message: "username already exists" });
-                }
-                if (err.errmsg.match(/email_1/)) {
-                    return res.json({ err_code: 2, message: "email already registered" });
-                }
-                return res.json({ err_code: err.code, message: err.errmsg });
-            } else {
-                req.logIn(user, function (err) {
-                    res.json({ err_code: 0, message: "signup success" });
-                });
-            }
-        });
-      })
-
-//Login
-router.route("/user/login")
-    .post(function (req, res, next) {
-        passport.authenticate('local', function (err, user, info) {
-            if (err) return next(err)
-            if (!user) {
-                return res.json({ err_code: 1, message: "wrong password or username" })
-            }
-            req.logIn(user, function (err) {
-                if (err) return next(err);
-				console.log("SUCCES LOGIN");
-                return res.json({ err_code: 0, message: "login success" });
-            });
-        })(req, res, next);
-    })
-
-//Logout
-router.route("/user/logout")
-    .post(function (req, res) {
-        req.logout();
-        res.json({ err_code: 0, message: "logout success" });
-    })
-
 router.route("/friendship/create")
     .post(function (req, res) {
   // Validation rules
@@ -818,23 +1221,27 @@ router.route("/friendship/delete/:id/:username/:friendname")
 
 router.route("/friendlist/:id")
     .get(function (req, res) {
-  // Validation rules
-  //req.checkParams('id', 'Id must be a non-negative Integer').isUID();
 
-  // Validate
-  //const errors = req.validationErrors();
+    console.log("router.route(/friendlist/:id e girdi !!!");
+  
+    console.log("router.route(/friendlist/:id req.params.id = " + req.params.id);
 
-  //if(errors){
-    // Send "422: Unprocessable Entity" with errors
-  //  res.status(422).json(errors);
-  //}else{
-    // Find user in DB
+    var id = req.params.id; 
+
+    console.log("TypeOf 1 " + typeof id); // string
+    console.log("TypeOf 2 " + typeof parseInt(id)); //number
+
     Friend.findById(req.params.id, (response) => {
-      let friendlist = [];
+    
+        let friendlist = [];
 
-      if(response.user !== null){
-        friendlist = response.user.friendlist;
+        console.log("router.route(/friendlist/:id response = " + JSON.stringify(response));
+    // console.log("router.route(/friendlist/:id response.user.friendlist = " + response.user.friendlist);
+
+        if(response.user !== null){
+            friendlist = response.user.friendlist;
       }
+    console.log("router.route(/friendlist/:id response.user.friendlist = " + friendlist);
 
       // Send "200: OK" with friendlist in JSON format
       res.status(200).json(friendlist);
@@ -855,16 +1262,37 @@ router.route("/friendlist/search/:id")
     //res.status(422).json(errors);
   //}else{
 
-    // Find user in DB
-	Player.find({'username': friendUsername }, function (err, data) {  
+    console.log("/friendlist/search/:id friendUsername = " + friendUsername)
+    
+   // Find user in DB
+	Player.findOne({'username': friendUsername }, function (err, data) {  
 	    if (err) 
-            {
-		res.status(500).send(err)
+        {
+		    res.status(500).send(err)
 	    } 
-            else 
-            {
-		res.send(data);
+        else if(data != null)
+        {
+            console.log(" Player Schemada var " + data);		    
+            res.send(data);
 	    }
+        else if(data == null){
+        
+            FacebookPlayer.findOne({'username': friendUsername }, function (err, data) {  
+            console.log(" FacebookPlayer Schema ");
+            
+                if (err) 
+                {
+                    console.log(" FacebookPlayer Schemada yok err = " + err);                   
+                    res.status(500).send(err)
+                } 
+                else 
+                {
+                    console.log(" FacebookPlayer Schemada var data = " + data);
+                    res.send(data);
+                }
+            });
+        }        
+    
 	});
 
   //}
@@ -891,82 +1319,181 @@ router.route("/friendlist/getlist/:id")
 
 router.route("/testing/fillDB/sample")
     .get(function (req, res) {
-  dbFiller.clearCollection(() => {
-    dbFiller.sampleData(() => {
-      res.status(200).json({
-        users: 5,
-        connections: 2,
-      });
-    });
-  });
-})
+        dbFiller.clearCollection(() => {
+            dbFiller.sampleData(() => {
+            res.status(200).json({
+                users: 5,
+                connections: 2,
+            });
+            });
+        });
+    })
+
+router.route("/delete/everything/:username").post(function (req, res) {
+
+    console.log('/delete/everything GİRDİ!!!');
+           
+    // **************************** HERŞEYİ SİLMEK İÇİN !!!!!!! ****************************        
+            FriendChallengedGames.remove(function(err,removed) {
+                // where removed is the count of removed documents
+            });
+            GameRequests.remove(function(err,removed) {
+                // where removed is the count of removed documents
+            });
+            RandomChallengedGames.remove(function(err,removed) {
+                // where removed is the count of removed documents
+            });
+/*            Friend.remove(function(err,removed){
+
+            });*/
+    // **************************** HERŞEYİ SİLMEK İÇİN !!!!!!! **************************** 
+
+                res.status(500).json("Silindi...");
+ 
+})        
 
 
-router.route("/gamerequest/accept/:invitingusr/:invitedusr/:categoryid")
+router.route("/gamerequest/accept/:currentTimeInSeconds/:invitingusr/:invitedusr/:invitingusrId/:invitedusrId/:categoryid/:categoryname")
     .get(function (req, res) {
 
-  var invitingusername = req.params.invitingusr;
-  var invitedusername = req.params.invitedusr;
-  var gamereqcategoryid = req.params.categoryid;
-   var gameContentArray = [];
-    var infoForRankings1 = { socketInfo: invitingusername,
-                            scoreInfo: 0,
-                            usernameInfo: invitingusername,
-                            connectionIndex: 99}
+    console.log('/gamerequest/accept/:invitingusr/:invitedusr/ GİRDİ!!!');
 
-    var infoForRankings2 = { socketInfo: invitingusername,
-                            scoreInfo: 0,
-                            usernameInfo: invitedusername,
-                            connectionIndex: 100} 
+    var invitingusername = req.params.invitingusr;
+    var invitedusername = req.params.invitedusr;
+    var invitinguserid = req.params.invitingusrId;
+    var inviteduserid = req.params.invitedusrId;
+    var gamereqcategoryid = req.params.categoryid;
+    var gamereqcategoryname = req.params.categoryname;
+    var currentTimeInSeconds = req.params.currentTimeInSeconds
+    console.log('/gamerequest/accept/ PARAMETRELERİ = ' + invitinguserid + ' ' + inviteduserid + ' ' + gamereqcategoryid + ' TIME = ' + currentTimeInSeconds);
 
-     gameContentArray.push(infoForRankings1); 
-     gameContentArray.push(infoForRankings2);                                             
+    getFriendChallengeQuestions(currentTimeInSeconds, invitinguserid , inviteduserid, gamereqcategoryid, function(err, data) {
+        
+            if (err)
+            {
+                console.log(err);
+                response = {"error" : true,"message" : "There is not any gamerequest record"};
+            }
+            else if(data != null)
+            {
+                console.log('QUESTIONS IN ACCEPT ARE = ' + data.questions);
 
-    getGameRequestInfo(invitingusername , invitedusername, gamereqcategoryid, function(err, data) 
-    {
-        if (err)
-        {
-            console.log(err);
-            response = {"error" : true,"message" : "There is not any gamerequest record"};
-        }
-        else if(data != null)
-        {
+                //insertGamesAccepted(invitingusername , invitedusername, gamereqcategoryid, data.categoryname , data.questions , gameContentArray);
+                //insertGamesFromGameRequests(invitingusername, invitedusername, gamereqcategoryid, gamereqcategoryname, data.timeoutTime)
 
-            console.log('/gamerequest/accept/:invitingusr/:invitedusr/:categoryid');
-            deleteGameRequestInfo(invitingusername , invitedusername, gamereqcategoryid);
-            insertGamesAccepted(invitingusername , invitedusername, gamereqcategoryid, data.categoryname , data.questions , gameContentArray);
-            insertGamesFromGameRequests(0 , data.categoryname ,gamereqcategoryid, invitingusername, invitedusername ,  gameContentArray , data.timeoutTime)
-            
-             res.status(200).json(data.questions);
-        }
-        else if(data == null)
-        {
-            console.log('No game request exists.... ');
-            res.status(500).json("NULL DATA...");
-        }
-
+                res.status(200).json(data.questions);
+            }
+            else if(data == null)
+            {
+                console.log('No game request exists.... ');
+                res.status(500).json("NULL DATA...");
+            }
     });
 
+    getGameRequestInfo(currentTimeInSeconds, invitinguserid , inviteduserid, gamereqcategoryid, function(err, data) {
+        
+            if (err)
+            {
+                console.log(err);
+                response = {"error" : true,"message" : "There is not any gamerequest record"};
+            }
+            else if(data != null)
+            {
+                console.log('/gamerequest/accept getGameRequestInfo ELSE İÇİ');
+                insertGamesFromGameRequests(currentTimeInSeconds, invitingusername, invitedusername, invitinguserid, inviteduserid, gamereqcategoryid, gamereqcategoryname, data.timeoutTime, data.isExpired, data.scoreArrayForChallengeRank, data.completed, data.isCurrentViewerDeletedDiv);
+               // data.usersThatDidntDeleteGame.push(invitedusername);
+                
+                deleteGameRequestInfo(currentTimeInSeconds, invitinguserid , inviteduserid, gamereqcategoryid);
+
+            }
+            else if(data == null)
+            {
+                console.log('No game request exists.... ');
+                res.status(500).json("NULL DATA...");
+            }
+    });
+    
 })
 
-
-router.route("/game/updatescore/:invitingusr/:invitedusr/:categoryid/:usernameupdated/:score")
+router.route("/gamerequest/decline/:currentTimeInSeconds/:invitingusrId/:invitedusrId/:categoryid/:decliningusername")
     .get(function (req, res) {
 
-        var invitingusername = req.params.invitingusr;
-        var invitedusername = req.params.invitedusr;
+   
+    var invitinguserid = req.params.invitingusrId;
+    var inviteduserid = req.params.invitedusrId;   
+    var gamereqcategoryid = req.params.categoryid;
+    var currentTimeInSeconds = req.params.currentTimeInSeconds;
+    var decliningusername = req.params.decliningusername;
+
+    console.log('/gamerequest/decline/:invitingusr/:invitedusr/:categoryid e GİRDİ');
+    // deleteGameRequestInfo(invitingusername , invitedusername, gamereqcategoryid);
+    // res.status(200).json({"error" : false,"message" : "Succesfully Removed"});
+    
+    GameRequests.find({'currentTimeInSeconds':currentTimeInSeconds,'invitinguserid' : invitinguserid , 'inviteduserid' : inviteduserid, 'categoryid' : gamereqcategoryid}, function(err, gamerequest) {
+        if (err) {
+            callback(err, null);
+        }
+        else {
+            console.log( "gamerequest to be declined is = " + gamerequest[0]);
+            var index = gamerequest[0].usersThatDidntDeleteGame.indexOf(decliningusername);    
+            if (index !== -1) {
+                    gamerequest[0].usersThatDidntDeleteGame.splice(index, 1);   //The first parameter (0) defines the position where new elements should be added (spliced in).
+                                            //The second parameter (1) defines how many elements should be removed.
+                                            //The rest of the parameters are omitted. No new elements will be added.
+            }
+            gamerequest[0].isDeclined = true;
+            gamerequest[0].save(function(err){
+                if (err) throw err;
+                else console.log('Game request DECLINED with Inviting User ' + invitinguserid + ' Invited user ' + inviteduserid + ' decliningusername ' + decliningusername);
+            }); 
+        }
+    });
+})
+//router.route("/gamerequest/decline/:currentTimeInSeconds/:invitingusr/:invitedusr/:invitingusrId/:invitedusrId/:categoryid/:decliningusername")
+
+
+router.route("/game/updatescore/:currentTimeInSeconds/:invitingusrId/:invitedusrId/:categoryid/:score/:finalTime/:updaterUsername")
+    .get(function (req, res) {
+// game/updatescore/1496419745/58f6170e72a5ba07aa8995e2/58f6172e72a5ba07aa8995e3/5770dc681a46fbcd071b5617/20/1.03/vcvc 
+    //  var invitingusername = req.params.invitingusr;
+    //  var invitedusername = req.params.invitedusr;
+        var invitinguserid = req.params.invitingusrId;
+        var inviteduserid = req.params.invitedusrId;
         var gamereqcategoryid = req.params.categoryid;
-        var usernameupdated = req.params.usernameupdated;
-        var score = req.params.score;
+        var updaterusrName = req.params.updaterUsername;
+        var usrScore = req.params.score;
+        var usrTime = req.params.finalTime;
+        var currentTimeInSeconds = req.params.currentTimeInSeconds
+        
+        console.log("Updating Score ... invitinguserid = " + invitinguserid + "inviteduserid = " + inviteduserid + " currentTimeInSeconds = " + currentTimeInSeconds  );
 
-        console.log("Updating Score");
+        var scoreArrayForChallengeRank = [];
 
-       updateAcceptedGameScoreInfo(invitingusername , invitedusername, gamereqcategoryid, usernameupdated , score);
+        var infoForRankings = { userScore: usrScore,
+                                userTime: usrTime,
+                                updaterUsername: updaterusrName }
 
+     //   scoreArrayForChallengeRank.push(infoForRankings); 
 
+        console.log("Updating Score ... gamereqcategoryid = " + gamereqcategoryid + " currentTimeInSeconds = " + currentTimeInSeconds  );
+
+       // updateAcceptedGameScoreInfo(invitingusername , invitedusername, gamereqcategoryid, usernameupdated , score);
+       updateGameScoreInfo(currentTimeInSeconds, invitinguserid, inviteduserid, gamereqcategoryid, infoForRankings,function(err, scoreArrayForChallengeRank)
+         {
+             if (err)
+            {
+                console.log(err);
+                response = {"error" : true,"message" : "There is not any record"};
+            }
+            else
+            {   
+                console.log('scores to sent --->' + scoreArrayForChallengeRank);
+                res.status(200).json(scoreArrayForChallengeRank);
+            }
+         });
 })
 
-router.route("/game/getscore/:invitingusr/:invitedusr/:categoryid/:usernameupdated")
+router.route("/game/getscore/:invitingusr/:currentTimeInSeconds/:invitedusr/:categoryid/:usernameupdated")//Ozan: birebir düeollada scoreUPDATİNİ ALMAK İÇİN 
     .get(function (req, res) {
 
         var invitingusername = req.params.invitingusr;
@@ -974,10 +1501,11 @@ router.route("/game/getscore/:invitingusr/:invitedusr/:categoryid/:usernameupdat
         var gamereqcategoryid = req.params.categoryid;
         var usernameupdated = req.params.usernameupdated;
         var getscore = 0;
+        var currentTimeInSeconds = req.params.currentTimeInSeconds
 
         console.log("Getting Requested Score");
 
-        getAcceptedGameScoreInfoByUsername(invitingusername , invitedusername , gamereqcategoryid, usernameupdated, function(err, data) 
+        getAcceptedGameScoreInfoByUsername(currentTimeInSeconds,invitingusername , invitedusername , gamereqcategoryid, usernameupdated, function(err, data) 
         {
                 for(i = 0 ; i < data.gameContent.length ; i++)
                 {
@@ -989,30 +1517,124 @@ router.route("/game/getscore/:invitingusr/:invitedusr/:categoryid/:usernameupdat
                     }
                 }
         });
-
-
 })
 
+router.route("/randomGameChallenge/delete/:currentTimeInSeconds/:roomId/:useridtobedeleted")
+     .get(function (req, res) {
+
+        var categoryid = req.params.categoryid;
+        var useridtobedeleted = req.params.useridtobedeleted;
+        var currentTimeInSeconds = req.params.currentTimeInSeconds;
+        var roomId = req.params.roomId;
+       // var currentTimeInSeconds = req.params.currentTimeInSeconds
+        console.log('/randomGameChallenge/delete/:username e girdi !!!! ' + currentTimeInSeconds + " " + roomId + " " + useridtobedeleted);
+       
+
+       deleteUserFromRandomChallengedSchema(currentTimeInSeconds, roomId, useridtobedeleted, function(err, data) 
+        {
+            if (err)
+            {
+                console.log(err);
+                console.log("SERR");
+                response = {"error" : true,"message" : "Silinemedi"};
+            }
+            else
+            {   console.log("/randomGameChallenge/delete/: ELSE içi elaman SİLİNDİ");
+                res.status(200).json(data)
+                //res.json({ err_code: 0, message: "signup success",  userid: user._id });            
+            }
+                
+        }); // anasayfasında bu oyunu artık kayıtta tutmayan kullanıcıyı silme işi.        
+    })
+
+router.route("/friendGameChallenge/delete/:currentTimeInSeconds/:invitingusrId/:invitedusrId/:categoryid/:usernametobedeleted")
+     .get(function (req, res) {
 
 
+        var invitingusrid = req.params.invitingusrId;
+        var invitedusrid = req.params.invitedusrId;
+        var categoryid = req.params.categoryid;
+        var usernametobedeleted = req.params.usernametobedeleted;
+        var currentTimeInSeconds = req.params.currentTimeInSeconds
+        console.log('/friendGameChallenge/delete/:username e girdi !!!! ' + currentTimeInSeconds);
 
- 
-router.route("/gamerequest/decline/:invitingusr/:invitedusr/:categoryid")
+    //  deleteUserFromFriendChallengedSchema(invitingusr,invitedusr,categoryid,usernametobedeleted);
+        
+        deleteUserFromFriendChallengedSchema(currentTimeInSeconds,invitingusrid,invitedusrid,categoryid,usernametobedeleted, function(err, data) 
+        { // anasayfasında bu oyunu artık kayıtta tutmayan kullanıcıyı silme işi. 
+            if (err)
+            {
+                console.log("SERR");                
+                console.log(err);
+                console.log("SERR");
+                response = {"error" : true,"message" : "Silinemedi"};
+            }
+            else
+            {   console.log("/friendGameChallenge/delete/: ELSE içi elaman SİLİNDİ");
+
+                res.status(200).json(data)
+                //response = {"error" : false,"message" : "Silindi"};
+                //res.json({ err_code: 0, message: "signup success",  userid: user._id });            
+            }
+                
+        }); // anasayfasında bu oyunu artık kayıtta tutmayan kullanıcıyı silme işi.        
+    })
+    
+router.route("/gameRequest/delete/:currentTimeInSeconds/:invitingusrId/:invitedusrId/:categoryid/:useridtobedeleted")
+     .get(function (req, res) {
+// GameRequest Expiredan ya da declineddan sonra invtingin ya da invitedın bu requesti sayfasından silmesi
+
+        console.log('/sentGameRequest/delete/ !!!! ' );
+
+        var invitingusrid = req.params.invitingusrId;
+        var invitedusrid = req.params.invitedusrId;
+        var categoryid = req.params.categoryid;
+        var useridtobedeleted = req.params.useridtobedeleted;
+        var currentTimeInSeconds = req.params.currentTimeInSeconds
+        
+        deleteUserFromGameRequestSchema(currentTimeInSeconds,invitingusrid,invitedusrid,categoryid,useridtobedeleted, function(err, data) 
+        { // GameRequest Expiredan sonra invtingin ya da invitedın bu requesti sayfasından silmesi
+            if (err)
+            {
+                console.log(err);
+                console.log("SERR");
+                response = {"error" : true,"message" : "Silinemedi"};
+            }
+            else
+            {   
+                console.log("/gameRequest/delete/: ELSE içi elaman SİLİNDİ");
+                res.status(200).json(data);               
+                //res.json({ err_code: 0, message: "signup success",  userid: user._id });            
+            }
+                
+        }); 
+       
+    })  
+/*
+router.route("/sentGameRequest/delete/:invitingusr/:invitedusr/:categoryid/:usernametobedeleted")
+     .get(function (req, res) {
+
+        console.log('/sentGameRequest/delete/ !!!! ' );
+
+        var invitingusr = req.params.invitingusr;
+        var invitedusr = req.params.invitedusr;
+        var categoryid = req.params.categoryid;
+
+        deleteInvitingUserGameRequestSchema(invitingusr,invitedusr,categoryid, usernametobedeleted); 
+    })    
+*/
+
+router.route("/gamerequest/list/:userId")
     .get(function (req, res) {
 
-  var invitingusername = req.params.invitingusr;
-  var invitedusername = req.params.invitedusr;
-  var gamereqcategoryid = req.params.categoryid;
+        console.log('/gamerequest/list/:username e girdi !!!! ');
 
-  deleteGameRequestInfo(invitingusername , invitedusername, gamereqcategoryid);
-  res.status(200).json({"error" : false,"message" : "Succesfully Removed"});
-})
-
-router.route("/gamerequest/list/:invitedusr")
-    .get(function (req, res) {
-
-        var invitedusername = req.params.invitedusr;
-        getGameRequestListForUsername(invitedusername , function(err, data)
+        var currentTimeInSeconds = Math.round(new Date().getTime()/1000);
+       
+        checkGameRequestsTimeouts(currentTimeInSeconds);
+        
+        var userId = req.params.userId;
+        getGameRequestListForUserId(userId, function(err, data)
         {
             if (err)
             {
@@ -1021,8 +1643,7 @@ router.route("/gamerequest/list/:invitedusr")
             }
             else if(data != null)
             {
-
-                console.log('/gamerequest/list/:invitedusr');
+              //  console.log('/gamerequest/list/:invitedusr ELSE IF İÇİ data = ' + data);
                 res.status(200).json(data);
             }
             else if(data == null)
@@ -1033,611 +1654,582 @@ router.route("/gamerequest/list/:invitedusr")
 
         });
 
-    })
+})
+/*
+router.route("/sentgamerequest/list/:invitingusr")
+    .get(function (req, res) {
 
+        console.log('/sentgamerequest/list/:invitingusr e girdi !!!! ' );
 
-io.on('connection', function (socket) {
+        var currentTimeInSeconds = Math.round(new Date().getTime()/1000);
+       
+        checkGameRequestsTimeouts(currentTimeInSeconds);
 
-    console.log('a user connected with socket id ' + socket.id);
-
-    if(scoresArray.length==0)
-      createScoresArray();
-
-    var addedUser = false;
-
-    socket.on('disconnect', function(mysocket)
-    {
-        deleteOnlineUserList(socket.id);
-        console.log(socket.id + ' is Disconnected');
-
-        
-    });
-
-    socket.on('updateOnlineUserList', function(mysocket)
-    {
-        console.log('updateOnlineUserList INSERTING USER TO THE ONLINE USER LIST WITH USERNAME ' + mysocket.username);
-        getUserInfoByName(mysocket.username, function(err, data) {
-            if (err)
-            {
-                console.log(err);
-                response = {"error" : true,"message" : "There is not any record"};
-            }
-            else if(data != null)
-            {
-
-                console.log('insertOnlineUserList Username: ' + data.username + ' Id: ' + data._id);
-                insertOnlineUserList(data.username , data._id , socket.id);
-            }
-
-    });
-    });
-
-     socket.on('findUserOnlineUserlist', function(mysocket)
-     {
-         console.log('INVITED USERNAME IS ' + mysocket.invitedusername);
-
-         getUserInfoByNameOnlineUserList(mysocket.invitedusername, function(err, data) {
-            if (err)
-            {
-                console.log(err);
-                response = {"error" : true,"message" : "There is not any record"};
-            }
-            else if(data != null)
-            {
-
-                console.log('findUserOnlineUserlist ');
-                io.emit('findUserOnlineUserlist', {
-                      onlineuserinfo: data
-                });
-            }
-
-    });
-
-     });
-
-    socket.on('get1to1challengeinvitinguserquestion', function(mysocket)
-     {
-         console.log('get1to1challengeinvitinguserquestion function is entered');
-         getGamesAcceptedInfo(mysocket.invitingusername , mysocket.invitedusername , mysocket.categoryid , function(err, data)
-         {
-             console.log('get1to1challengeinvitinguserquestion QUESTIONS to sent --->' + JSON.stringify(data.questions));
-             socket.emit('1to1challengesendquestions', data.questions);
-         });
-
-
- 
-     });
-
-    socket.on('inviteGame', function(mysocket)
-     {
-         console.log('inviteGame function is entered');
-
-          //io.sockets.connected[mysocket.invitedsocketid].emit("showinvitebox" , {'invitedusername': mysocket.invitingusername , 'invitedsocketid': data.onlineuserinfo.invitingsocketid});
- 
-     });
-
-    socket.on('gamerequest', function(mysocket)
-    {
-        console.log('Server.js  gamerequest function is entered with parameters ' + mysocket.invitingusername + '  ' + mysocket.invitedusername +  '  ' + mysocket.categoryid);
-
-        getGameRequestInfo(mysocket.invitingusername , mysocket.invitedusername, mysocket.categoryid, function(err, data) {
+        var invitingusername = req.params.invitingusr;
+        getSentGameRequestListForUsername(invitingusername , function(err, data)
+        {
             if (err)
             {
                 console.log(err);
                 response = {"error" : true,"message" : "There is not any gamerequest record"};
             }
-            else if(data == null)
-            {
-                getCategoryInfoByCategoryId(mysocket.invitingusername , mysocket.invitedusername, mysocket.categoryid, function(err, data) {
-
-                        console.log('insertGameRequest ');
-                        console.log('Category name ---> ' + data.name);
-                        insertGameRequest(mysocket.invitingusername , mysocket.invitedusername, mysocket.categoryid, data.name);
-
-                });
-
-            }
             else if(data != null)
             {
-                console.log('There is an existing invitation ');
+                console.log('/gamerequest/list/:invitedusr ELSE IF İÇİ data = ');
+                data.questions = null;
+                res.status(200).json(data);
             }
+            else if(data == null)
+            {
+                console.log('No game request exists.... ');
+                res.status(500).json({"error" : true,"message" : "There is not any gamerequest record"});
+            }
+        });
+    })    
 
+*/
+io.on('connection', function (socket) {
+
+        console.log('a user connected with socket id ' + socket.id);
+
+        socket.on('disconnect', function(mysocket)
+        {
+            deleteOnlineUserList(socket.id);
+            console.log(socket.id + ' is Disconnected');            
         });
 
-        console.log("After inserting game request info");
-        var qNumber = 10;
-        getQuestionsByCategory(mysocket.categoryid, qNumber, function(err, data) {
+        socket.on('randomChallengedGameHistory', function(params){
+
+            var currentTimeInSeconds = Math.round(new Date().getTime()/1000);
+                      
+          // ***************** Sonra kullanılcak bu ***********************
+          //  deleteRandomChallegedTimeoutGames(currentTimeInSeconds);
+          // ***************** Sonra kullanılcak bu ***********************
+
+            findRandomChallengedGamesWUsername(params.userId , function(err , games) {
+                
+                console.log("randomChallengedGameHistory gameHistory içi GAMES = " + games +" USERID = " + params.userId + "  length = " + games.length);                          
+
+                if(games.length > 0)
+                    {
+                        console.log("randomChallengedGameHistory " + games);
+                        socket.emit('randomChallengedGameHistory', {gamesHistory: games});
+                    }
+                console.log("EMIT GERCEKLESTİ ****** ");    
+            })
+        });
+    
+        socket.on('friendChallengedGameHistory', function(params){
+
+                var currentTimeInSeconds = Math.round(new Date().getTime()/1000);
+            
+                //**************************************************************** */
+                //Bunu DÜZELT çok verimsiz. Her gameHistory isteyen için bütün gamerequestleri kontrol etmek olmaz
+               
+                checkFriendChallegedTimeoutGames(currentTimeInSeconds);
+               
+                //****************************************************************
+                findFriendChallengedGameHistoryWUsername(params.userId , function(err , games) {
+                   
+                    console.log("friendChallengedGameHistory içi GAMES = " + games +" USERID = " + params.userId
+                    + "  length = " + games.length + " " + games.usersThatDidntDeleteGame );                          
+
+                    if(games.length > 0)
+                    {
+                        socket.emit('friendChallengedGameHistory', {gamesHistory: games});                           
+                    }
+                console.log("EMIT GERCEKLESTİ ****** ");    
+                })
+        });
+
+       socket.on('gamerequest', function(mysocket){
+            
+            console.log('gamerequest function içi mysocket değerleri = ' + mysocket.invitingusername + '  ' + mysocket.invitedusername 
+                +  '  ' + mysocket.categoryid + ' ' + mysocket.categoryname + ' ' + mysocket.invitinguserid + ' ' + mysocket.inviteduserid);
+
+            // *************** SORU SAYISI !!!!!!!!!!!!! **********************
+                var qNumber = 5;
+            // *************** SORU SAYISI !!!!!!!!!!!!! **********************
+
+            getQuestionsByCategory(mysocket.categoryid, qNumber, function(err, data) {
+                if (err)
+                {
+                    console.log(err);
+                    response = {"error" : true,"message" : "There is not any record"};
+                }
+                else if(data != null && (qNumber > 0))
+                {
+                    console.log("****************** GETTING QUESTIONS ********************");
+                    var allQuestions = (data._doc).questions;
+                    var numQuestions = (data._doc.questions).length;
+                    var rndquestnumbers = new Array(qNumber);
+                    var questionData = new Array(qNumber);
+                    rndquestnumbers = _arrayRandom(qNumber, 0, numQuestions, true);
+                    for (var i = 0; i < qNumber; i++)
+                    {
+                        if(allQuestions != null && (qNumber <= numQuestions))
+                        {
+                            questionData[i] = allQuestions[rndquestnumbers[i]]._doc;
+                            response = {"error" : false,"message" : questionData};
+                        }
+                        else
+                        {
+                            response = {"error" : true,"message" : "Opps some parameter is wrong"};
+                        }
+                    }
+                  //console.log("QUESTIONS IN GAMEREQUEST ARE = " + JSON.stringify(questionData) );
+                  //updateQuestionsGameRequestInfo(mysocket.invitingusername , mysocket.invitedusername, mysocket.categoryid , questionData);
+    
+                var isExpired = false;
+                var completed = 0;
+                var isDeclined = false;
+                var isCurrentViewerDeletedDiv = false;
+
+                insertGameRequest(mysocket.currentTimeInSeconds, mysocket.invitingusername , mysocket.invitedusername, mysocket.invitinguserid, mysocket.inviteduserid, mysocket.categoryid, mysocket.categoryname, isExpired, completed, isDeclined, isCurrentViewerDeletedDiv, function(err , newGameRequest) {                        
+
+                    if(newGameRequest != null)
+                    {
+                        console.log("insertGameRequest'ten gelen cevap = " + newGameRequest); 
+                    }
+                    else
+                        console.log(" ERROR !!! insert edilemedi!!!"); 
+                   
+                });
+
+                setFriendChallengeQuestions(mysocket.currentTimeInSeconds, mysocket.invitinguserid , mysocket.inviteduserid, mysocket.categoryid, mysocket.categoryname, questionData, function(err , newGameQuestions) {                        
+
+                    if(newGameQuestions != null)
+                    {
+                       // console.log("setFriendChallengeQuestions'ten gelen cevap = " + newGameQuestions); 
+                    }
+                    else
+                        console.log(" ERROR !!! sorular set edilemedi!!!"); 
+                   
+                });
+
+                socket.emit('gamerequest', questionData);
+
+                /****questionların gamerequest schemasına kaydedildiği zamanki insertGameRequest bu ****** 
+                                       
+                    insertGameRequest(mysocket.invitingusername , mysocket.invitedusername, mysocket.categoryid, data.name , questionData);
+                 // insertGameRequest() metodu GameRequests modeline yeni bir kayıt yapıyor.
+
+                    socket.emit('gamerequest', questionData);
+                                            
+                /****questionların gamerequest schemasına kaydedildiği zamanki insertGameRequest bu ****** */
+
+                }
+                else
+                {
+                    console.log("Data is null")
+                }
+            });
+        });
+
+        socket.on('allCategories', function(mysocket)
+        {
+            //console.log('SERVER PART USERNAME ' + mysocket.username);
+            getCategoryByUser(function(err, data) 
+            {
+                console.log("allCategories = " + JSON.stringify(data));
+                io.emit('allCategories', {
+                        allCategories: data,
+                        image : "https://snap-photos.s3.amazonaws.com/img-thumbs/280h/GFIZG3CMEB.jpg"
+                });
+            });
+        });
+
+
+    //*********************************************************************************************************************
+    //*********************************************************************************************************************
+    //*********************************************************************************************************************
+
+        socket.on('score', function(info){
+
+            // if(scoresArray.length==0 || scoresArray[99][99]!== 'undefined'){
+            if(scoresArray.length == 100)       
+                createScoresArray();
+                         
+            var infoForRankings = { socketInfo: info.socketConnectedTo,
+                                    userScore: info.score,
+                                    updaterUsername: info.username,
+                                    connectionIndex: info.connectionIndex,
+                                    userTime: info.finalTime }
+
+            console.log("socket.on(score) içi " + " length = " + scoresArray.length + " info.socketConnectedTo = " + info.socketConnectedTo);
+            console.log(" userID =  ---->>>> " + info.userid );
+            console.log(" currentTimeInSeconds  ----->>>>> " + info.currentTimeInSeconds );
+            console.log("CATEGORY NAME  ----->>>>> " + info.categoryname );
+
+            for( var i = 0, len = scoresArray.length; i < len; i++ ) { 
+                
+            // scoresArray = [ [theRoom, infoForRankings1, infoForRankings2, infoForRankings3], [ ], [ ], ..... ]
+            // roomObject = [ theRoom, Questions ]
+            
+            /*  var theRoom = { 
+                roomId:socketEntity.username,
+                currentTimeInSeconds: socketEntity.currentTimeInSeconds
+                categoryId: socketEntity.categoryId,
+                numUsers:0
+            }*/
+                if( scoresArray[i][0].roomId === info.socketConnectedTo && scoresArray[i][0].currentTimeInSeconds === info.currentTimeInSeconds ) { 
+                
+                // vcvc kullanıcısı adına bir oda açıldı diyelim. ve sonra bu kullanıcı başka bir kategoride bir oda             
+                // daha açtı. Bu durumda iki ayrı kategorideki odanın scorelarını aynı odaya alıyo. yani örneğin kan
+                // kategorisi için vcvc'ye ait iki skor oluyor. bu yüzden roomid eşleşmesinin yanına currenttime da 
+                // koydum. tabi time yerine categoryid de koysam olurdu.
+
+                //    console.log("for içi IF İÇİ infoForRankings.connectionIndex 0 = " + infoForRankings.connectionIndex);                    
+                    console.log("for içi IF İÇİ scoresArray[i] BEFORE push = " + JSON.stringify(scoresArray[i]) + 
+                                 " info.socketConnectedTo = " + info.socketConnectedTo );
+
+                    scoresArray[i].push(infoForRankings);
+
+                    console.log("scoresArray[i] AFTER push = " + JSON.stringify(scoresArray[i]));
+                    console.log("scoresArray[i] AFTER shift = " + scoresArray[i].shift);
+                    
+                    arrayToClient = sortScoresArray(scoresArray[i]);                        
+                    var scoresArrayJson = JSON.stringify(arrayToClient);
+
+                    findRandomChallengedGameWRoomId(info.socketConnectedTo, info.currentTimeInSeconds, function(err, game){
+
+                        if(game != null)
+                        {
+                            game.usersThatDidntDeleteGame.push(info.userid);
+                            game.infoForRankings.push(infoForRankings);
+                            
+                            console.log("infoForRankings.socketInfo = " + infoForRankings.socketInfo)
+                            console.log("scoresArrayJson = " + scoresArrayJson);
+                            
+                            socket.join(infoForRankings.socketInfo);
+                            io.to(infoForRankings.socketInfo).emit('score', {
+                                scoresArray: scoresArrayJson
+                            });
+
+                            game.save(function(err) {
+                                if (err){
+                                    console.log(err);
+                                    throw err;
+                                }
+                                console.log('Score Array INSERTED');                                
+                            }); 
+
+                            if(scoresArray[i].length == 4)
+                            game.completed = 1;
+
+                            console.log("****************** game START ******************"); 
+                            console.log(game);
+                            console.log("****************** game END ****************** ");
+                        }
+                        else
+                            console.log(" Oyun bulanamadı !!!"); 
+                    });                    
+
+/*                  if(scoresArray[i].length == 4){ // 4 olmasının nedeni başta(scoresArray[0]) bi de username olması.
+                                                  // Buraya bi de || koyup yarışmanın zaman sınırı doldugunda emit et de
+
+                        console.log("for içi IF İÇİ infoForRankings.socketInfo = " + infoForRankings.socketInfo);
+
+                        arrayToClient = sortScoresArray(scoresArray[i]);                        
+                        var scoresArrayJson = JSON.stringify(arrayToClient);
+                        
+                        io.to(infoForRankings.socketInfo).emit('score', {
+                                scoresArray: scoresArrayJson
+                        });                        
+                  }
+ */                                       
+                    function findRoomObject(socketos) { 
+                         return socketos.roomId === info.socketConnectedTo;
+                    }
+                    
+                    scoresArray.find(findRoomObject);                                      
+                    
+                    console.log("UNCOMPLETED GAME");
+                    console.log("*********************** scoresArrayJson **************************");
+                    console.log(scoresArrayJson);
+                    console.log("*********************** scoresArray[0][1] **************************");
+                    console.log(scoresArray[0][1]);
+                    console.log("*********************** scoresArray[i] **************************");                    
+                    console.log("for içi IF İÇİ scoresArray[i] = " + scoresArray[i]);
+                   
+                    break;
+                }
+            }                                  
+
+            function findRoomObject(socketos) { 
+                return socketos.roomId === info.socketConnectedTo;
+            }
+            scoresArray.find(findRoomObject);
+        });
+
+//*********************************************************************************************************************
+
+     // RANDOM GAME CHALLENGE OYNAMA İSTEKLERİNİN İLK KISMI
+
+        if(scoresArray.length==0)
+            createScoresArray();
+
+        socket.on('575e798ca02edd940875a65a', function(socketEntity){
+            checkClientStatus(socket, socketEntity,'575e798ca02edd940875a65a');
+        });
+        socket.on('575e79a8a02edd940875a65b', function(socketEntity){
+            checkClientStatus(socket, socketEntity,'575e79a8a02edd940875a65b');
+        });
+        socket.on('575fe940a02edd940875db89', function(socketEntity){
+            checkClientStatus(socket, socketEntity,'575fe940a02edd940875db89');    
+        });
+        socket.on('5762564aa02edd940876305d', function(socketEntity){
+            checkClientStatus(socket, socketEntity,'5762564aa02edd940876305d');    
+        });
+        socket.on('5763f85ca02edd9408766a27', function(socketEntity){
+            checkClientStatus(socket, socketEntity,'5763f85ca02edd9408766a27');    
+        });
+        socket.on('57678127a02edd940876ec0f', function(socketEntity){         
+            checkClientStatus(socket, socketEntity,'57678127a02edd940876ec0f');        
+        });
+        socket.on('5767b67da02edd940877394e', function(socketEntity){       
+            checkClientStatus(socket, socketEntity,'5767b67da02edd940877394e');
+        });
+        socket.on('5768f629a02edd9408774101', function(socketEntity){       
+            checkClientStatus(socket, socketEntity,'5768f629a02edd9408774101');       
+        });
+        socket.on('576edfde1a46fbcd0719e0fa', function(socketEntity){       
+            checkClientStatus(socket, socketEntity,'576edfde1a46fbcd0719e0fa');        
+        });
+        socket.on('576f8de91a46fbcd071a0b2a', function(socketEntity){        
+            checkClientStatus(socket, socketEntity,'576f8de91a46fbcd071a0b2a');
+        });
+        socket.on('576fface1a46fbcd071a9dff', function(socketEntity){       
+            checkClientStatus(socket, socketEntity,'576fface1a46fbcd071a9dff');    
+        });       
+        socket.on('5770dc681a46fbcd071b5617', function(socketEntity){        
+            checkClientStatus(socket, socketEntity,'5770dc681a46fbcd071b5617');   
+        });   
+});
+
+//*********************************************************************************************************************
+// RANDOM GAME CHALLENGE OYNAMA İSTEKLERİNİN DEVAM KISMI
+
+function checkClientStatus(socket, socketEntity, categoryId){ // 2. kere aynı odaya giremesin diye. yani 
+                        // bitirip ciktiği kategorideki yarışmaya tekrar girme ihtimalini yok etmek için.
+     
+     isClientInOngoingPlayInCategory(socketEntity.userid, categoryId, function(err, game){
+        if (err){
+            console.log(err);
+        }
+        else if(game != null)
+        {   
+            console.log(" (game != null) içi " + game);
+            var res = {};
+            console.log("Bu kategorideki oyununuz bitmedi")
+            socket.emit(categoryId, {"error" : true,"message" : "Bu kategorideki oyununuz bitmedi"}); 
+        }
+        else if(game == null)
+        {   
+            console.log("game == null içi ");            
+            setRoomAndScoresarraySendQuestions(socket, socketEntity, categoryId);
+        }
+    });
+}
+
+function setRoomAndScoresarraySendQuestions(socket, socketEntity, categoryId){
+
+    console.log("HANDLESCORE İÇİ socketEntity.userid = " + socketEntity.userid + " categoryId = " + categoryId);
+
+       if(categoryId == '575e798ca02edd940875a65a')
+             roomObject = roomObject_575e798ca02edd940875a65a;
+       else if(categoryId == '575e79a8a02edd940875a65b')
+             roomObject = roomObject_575e79a8a02edd940875a65b;  
+       else if(categoryId == '575fe940a02edd940875db89')
+             roomObject = roomObject_575fe940a02edd940875db89;             
+        else if(categoryId == '5762564aa02edd940876305d')
+             roomObject = roomObject_5762564aa02edd940876305d;                                    
+       else if(categoryId == '5763f85ca02edd9408766a27')
+             roomObject = roomObject_5763f85ca02edd9408766a27;
+       else if(categoryId == '57678127a02edd940876ec0f')
+             roomObject = roomObject_57678127a02edd940876ec0f;        
+       else if(categoryId == '5767b67da02edd940877394e')
+             roomObject = roomObject_5767b67da02edd940877394e;
+       else if(categoryId == '5768f629a02edd9408774101')
+             roomObject = roomObject_5768f629a02edd9408774101;
+       else if(categoryId == '576edfde1a46fbcd0719e0fa')
+             roomObject = roomObject_576edfde1a46fbcd0719e0fa;
+       else if(categoryId == '576f8de91a46fbcd071a0b2a')
+             roomObject = roomObject_576f8de91a46fbcd071a0b2a;
+       else if(categoryId == '576fface1a46fbcd071a9dff')
+             roomObject = roomObject_576fface1a46fbcd071a9dff;
+       else if(categoryId == '5770dc681a46fbcd071b5617')
+             roomObject = roomObject_5770dc681a46fbcd071b5617;  
+
+        console.log("HANDLESCORE İÇİ roomObject.length  = " + roomObject.length);
+        console.log("HANDLESCORE İÇİ roomObject.length  = " + roomObject[0] +
+        " " + roomObject[1]);
+                       
+        if(roomObject.length == 0 ){ // There is NOT any availble room so yeni room yarat
+
+            console.log("There is NOT any availble room " + socketEntity.userid);
+           
+            var timeoutValue = 300;            
+            var mycurrentTimeInSeconds = Math.round(new Date().getTime()/1000);
+           
+            var theRoom = { 
+                roomId:socketEntity.userid, // Burdaki roomid sadece username olmamalı çünkü aynı user birden fazla yarışma açabilir.
+                                         // Dolayısıyla roomid nin unique olması için client tarafından username yanında o andaki time ile gelmeli.
+                currentTimeInSeconds: mycurrentTimeInSeconds,
+                categoryId: socketEntity.categoryId,
+                numUsers:0
+            }
+
+  //         socket.join(theRoom.roomId);
+             theRoom.numUsers++;
+             connectionIndx = theRoom.numUsers;
+
+             roomObject.push(theRoom);  // roomObject = [ theRoom, Questions ]
+             
+           //  scoresArray[index][0] = theRoom.roomId;   // ilk kolonu yani roomId kolonunu oluşturyoruz
+             scoresArray[index][0] = theRoom; 
+             index++;
+             scoresArray.push([]);             
+
+          // scoresArray = [ [roomId, infoForRankings1, infoForRankings2, infoForRankings3], [ ], [ ], ..... ]
+
+            var categoryNumber = socketEntity.categoryId;
+            console.log("CATEGORY ID   ********** " + categoryNumber );
+            var qNumber = 5;
+            var response = {};
+            var questionData = new Array(qNumber);
+
+            getQuestionsByCategory(categoryNumber, qNumber, function(err, data) {
+                if (err)
+                {
+                    console.log(err);
+                    response = {"error" : true,"message" : "There is not any record"};
+                }
+                else if(data != null && (qNumber > 0))
+                {
+                    var allQuestions = (data._doc).questions;
+                    var numQuestions = (data._doc.questions).length;
+                    var rndquestnumbers = new Array(qNumber);
+                    
+                    rndquestnumbers = _arrayRandom(qNumber, 0, numQuestions, true);
+                    for (var i = 0; i < qNumber; i++)
+                    {
+                        if(allQuestions != null && (qNumber <= numQuestions))
+                        {
+                            questionData[i] = allQuestions[rndquestnumbers[i]]._doc;
+                            response = {"error" : false, "message" : questionData};
+                        }
+                        else
+                        {
+                            response = {"error" : true,"message" : "Opps some parameter is wrong"};
+                        }
+                    }
+                }
+                else
+                {
+                    response = {"error" : true,"message" : "There is not any response"};
+                }
+                // console.log("Response =  " + response);
+				console.log("questions emitten once");
+				console.log("*************************SORULAR**********************");
+			  //  console.log(questionData);
+                console.log("***********************socketEntity**********************");
+				console.log(socketEntity);
+            
+                questionsToSent = questionData;
+                roomObject[1] = (questionsToSent);
+
+            // roomObject = [ theRoom, Questions ]
+
+              socket.emit(categoryId, {
+                      questions: questionData,
+                      theRoomId: socketEntity.userid,
+                      currentTimeInSeconds: theRoom.currentTimeInSeconds,
+                      connectionIndex: connectionIndx 
+              });
+                
+/*                                	
+                io.to(theRoom.roomId).emit(categoryId, {
+                      questions: questionData,
+                      theRoomId: socketEntity.userid,
+                      currentTimeInSeconds: theRoom.currentTimeInSeconds,
+                      connectionIndex: connectionIndx 
+                });
+                */
+                function getCurrentQuestions(){
+                    return questionsToSent;
+                }                      
+            });             
+            console.log("theRoom.roomId = " + theRoom.roomId  );
+            console.log("Num of Users = " + theRoom.numUsers );
+
+            var newGame = new RandomChallengedGames();
+ 
+            newGame.roomId = theRoom.roomId;
+            newGame.currentTimeInSeconds = theRoom.currentTimeInSeconds;
+            newGame.categoryid = theRoom.categoryId;
+            newGame.categoryname = socketEntity.categoryName;
+            newGame.completed = 0;
+            newGame.questionData = questionData;
+            newGame.isCurrentViewerDeletedDiv = false;
+            newGame.timeoutTime = mycurrentTimeInSeconds + timeoutValue;
+             
+            // save the user
+            newGame.save(function(err) {
             if (err)
             {
                 console.log(err);
-                response = {"error" : true,"message" : "There is not any record"};
-            }
-            else if(data != null && (qNumber > 0))
-            {
-                console.log("****************** GETTING QUESTIONS ********************")
-                var allQuestions = (data._doc).questions;
-                var numQuestions = (data._doc.questions).length;
-                var rndquestnumbers = new Array(qNumber);
-                var questionData = new Array(qNumber);
-                rndquestnumbers = _arrayRandom(qNumber, 0, numQuestions, true);
-                for (var i = 0; i < qNumber; i++)
-                {
-                    if(allQuestions != null && (qNumber <= numQuestions))
-                    {
-                        questionData[i] = allQuestions[rndquestnumbers[i]]._doc;
-                        response = {"error" : false,"message" : questionData};
-
-                    }
-                    else
-                    {
-                        response = {"error" : true,"message" : "Opps some parameter is wrong"};
-                    }
-                }
-
-                console.log("BEFORE ENTERING updateQuestıonsGameRequestInfo QUESTIONS ARE ************* " + JSON.stringify(questionData) );
-
-                //console.log("Waiting 3 seconds");
-		//var waitTill = new Date(new Date().getTime() + 3 * 1000);
-		//while(waitTill > new Date()){}
-
-                updateQuestıonsGameRequestInfo(mysocket.invitingusername , mysocket.invitedusername, mysocket.categoryid , questionData);
-                
-
-            }
-            else
-            {
-                console.log("Data is null")
+                throw err;
             }
 
-
-         });
-    });
-
-     socket.on('allCategories', function(mysocket)
-     {
-         //console.log('SERVER PART USERNAME ' + mysocket.username);
-          getCategoryByUser(function(err, data) 
-          {
-              console.log(JSON.stringify(data));
-              io.emit('allCategories', {
-                      allCategories: data,
-                      image : "https://snap-photos.s3.amazonaws.com/img-thumbs/280h/GFIZG3CMEB.jpg"
-              });
-          });
-     });
-
-//*********************************************************************************************************************
-
-    socket.on('575e798ca02edd940875a65a', function(socketEntity){
-        handleScoreOnQuestions(socket, socketEntity,'575e798ca02edd940875a65a');
-    });
-    socket.on('575e79a8a02edd940875a65b', function(socketEntity){
-        handleScoreOnQuestions(socket, socketEntity,'575e79a8a02edd940875a65b');
-    });
-    socket.on('575fe940a02edd940875db89', function(socketEntity){
-        handleScoreOnQuestions(socket, socketEntity,'575fe940a02edd940875db89');    
-    });
-    socket.on('5762564aa02edd940876305d', function(socketEntity){
-        handleScoreOnQuestions(socket, socketEntity,'5762564aa02edd940876305d');    
-    });
-    socket.on('5763f85ca02edd9408766a27', function(socketEntity){
-        handleScoreOnQuestions(socket, socketEntity,'5763f85ca02edd9408766a27');    
-    });
-    socket.on('57678127a02edd940876ec0f', function(socketEntity){         
-        handleScoreOnQuestions(socket, socketEntity,'57678127a02edd940876ec0f');        
-    });
-    socket.on('5767b67da02edd940877394e', function(socketEntity){       
-        handleScoreOnQuestions(socket, socketEntity,'5767b67da02edd940877394e');
-    });
-    socket.on('5768f629a02edd9408774101', function(socketEntity){       
-        handleScoreOnQuestions(socket, socketEntity,'5768f629a02edd9408774101');       
-    });
-    socket.on('576edfde1a46fbcd0719e0fa', function(socketEntity){       
-        handleScoreOnQuestions(socket, socketEntity,'576edfde1a46fbcd0719e0fa');        
-    });
-    socket.on('576f8de91a46fbcd071a0b2a', function(socketEntity){        
-        handleScoreOnQuestions(socket, socketEntity,'576f8de91a46fbcd071a0b2a');
-    });
-    socket.on('576fface1a46fbcd071a9dff', function(socketEntity){       
-        handleScoreOnQuestions(socket, socketEntity,'576fface1a46fbcd071a9dff');    
-    });       
-    socket.on('5770dc681a46fbcd071b5617', function(socketEntity){        
-        handleScoreOnQuestions(socket, socketEntity,'5770dc681a46fbcd071b5617');   
-    });
-
-
-
-//*********************************************************************************************************************
-//*********************************************************************************************************************
-//*********************************************************************************************************************
-//*********************************************************************************************************************
-//*********************************************************************************************************************
-
-
-    socket.on('score', function(info){
-
-        //    if(scoresArray.length==0 || scoresArray[99][99]!== 'undefined'){
-            if(scoresArray.length == 100){
-          
-                console.log(" socket.on(score) içi -2 " + scoresArray.length + " " + scoresArray[99][99]);
-                createScoresArray();
-            }             
-            var infoForRankings = { socketInfo: info.socketConnectedTo,
-                                      scoreInfo: info.score,
-                                      usernameInfo: info.username,
-                                      categoryname: info.categoryname,
-                                      connectionIndex: info.connectionIndex,
-                                      categoryId: info.categoryId,
-                                      finalTime: info.finalTime }
-
-            console.log("socket.on(score) içi -1 " + " length = " + scoresArray.length + 
-            " info.socketConnectedTo = " + info.socketConnectedTo);
-
-          console.log("CATEGORY ID SERVER ---->>>> " + info.categoryid );
-          console.log("CATEGORY NAME SERVER ----->>>>> " + info.categoryname );
-
-            for( var i = 0, len = scoresArray.length; i < len; i++ ) {
-
-                  if( scoresArray[i][0] === info.socketConnectedTo ) {
-                     
-                      console.log("for içi IF İÇİ infoForRankings.connectionIndex 0 = " 
-                      + infoForRankings.connectionIndex); 
-                      
-                      console.log("for içi IF İÇİ scoresArray[i].length 1 = " 
-                                    + scoresArray[i].length + " *** İ = " + i 
-                                    + " scoresArray[i] BEFORE push = " + scoresArray[i]);
-
-                 //     scoresArray[i][infoForRankings.connectionIndex] = (infoForRankings);
-                      scoresArray[i].push(infoForRankings);
-
-                     console.log("scoresArray[i] AFTER push = " + scoresArray[i]);
-                     console.log("scoresArray[i] AFTER shift = " + scoresArray[i].shift);
-                     
-                     arrayToClient = sortScoresArray(scoresArray[i]);
-                          
-                      var scoresArrayJson = JSON.stringify(arrayToClient);
-
-
-///////////////////////////////////////////////// OZAN 2 START /////////////////////////////////////////////////
-                      
-                      console.log("UNCOMPLETED GAME");
-                      console.log("***********************UNCOMPLETED GAME SCORES ARRAY JSON **************************");
-                      console.log(scoresArrayJson);
-                      console.log("***********************UNCOMPLETED GAME NORMAL SCORES ARRAY **************************");
-                      console.log(scoresArray[0][1]);
-                      console.log("***********************UNCOMPLETED GAME NORMAL SCORES ARRAY FINISH **************************");
-
-                      var newGame = new Games();
-                      var gameContentArray = [];
-                      var tmpgameContentArray = [];
-
-                      isGameExistWusername(info.username , info.socketConnectedTo , info.categoryid , function(err , game)
-                      {
-                          console.log("info.username ---> " + info.username );
-                          console.log("info.socketConnectedTo ---> " + info.socketConnectedTo);
-                          console.log("info.categoryid ----> " + info.categoryid);
-                          console.log("info.categoryNAME ----> " + info.categoryname);
-                          
-
-                          if(game.length === 0)
-                          {
-                              console.log("GAME DOES NOT EXIST");
-
-                              for(var ind = 0 ; ind < (scoresArray[i].length - 1) ; ind++)
-                              {
-                                  console.log("ARRAY LENGTH " + ind);
-                                  console.log("scoresArray[i][ind + 1]" + JSON.stringify(scoresArray[i][ind + 1]));
-                                  if((info.categoryid) === (scoresArray[i][ind + 1].categoryid))
-                                  {
-                                      tmpgameContentArray[ind] = scoresArray[i][ind + 1];
-                                  }
-
-                              }
-                            //  gameContentArray = cleanArray(tmpgameContentArray);
-                              gameContentArray = tmpgameContentArray;
-
+            console.log('********************* game saved and game ********************* = ');
+            console.log(newGame);
+            console.log('********************* game saved and game ********************* = ');
+                              
+            });            
+         }
+        
+         else {   // socketEntity.username !== theRoom.roomId ---> Kullanıcının kendi açtığı odaya 2. kere girmesini önlemek için               
+        
+            console.log("CATEGORY ID  ELSE !!!++ ********** " + categoryId );
             
-                          console.log("tmpgameContentArray  --->" + JSON.stringify(tmpgameContentArray));
-                              console.log("gameContentArray  --->" + JSON.stringify(gameContentArray));
+            console.log("There is availble room " + socketEntity);
 
-                              //newGame.gameId = i;
-                              newGame.username = info.username;
-                              newGame.gamename = info.socketConnectedTo;
-                              newGame.categoryid = info.categoryid;
-                              newGame.categoryname = info.categoryname;
-                              if(scoresArray[i].length == 4)
-                              {
-                                  newGame.completed = 1;
-                              }
-                              else
-                              {
-                                  newGame.completed = 0;
-                              }
+            roomId = getRoomId(roomObject);
+            socket.join(roomId);
+            console.log("There is availble room, room id is = " + roomId);
 
-                              newGame.gameContent = gameContentArray;
-//////OZAN 11032017
-                            var curTimeInSeconds = Math.round(new Date().getTime()/1000);
-                            var timeoutValue = 3600;
+            mycurrentTimeInSeconds = getRooomsCurrentTimeInSeconds(roomObject);
 
-                             newGame.timeoutTime = curTimeInSeconds + timeoutValue;
+            roomObject[0].numUsers++;
+            connectionIndx = roomObject[0].numUsers;
 
+            // roomObject = [ theRoom, Questions ]
+            
+            console.log("Shows all the rooms " + io.sockets.adapter.rooms);
+            console.log("Num of Users 2 = " + roomObject[0].numUsers);
+            console.log("theRoom.roomId 2 = " + roomObject[0].roomId);
 
-////////OZAN 11032017
+            currentQuestions = roomObject[1];
+            console.log("ELSE CURRENT QUESTIONS = " + roomObject[1]);
 
+    // *********************** ÖNEMLİ !!!!!!!!!!!!!!!!!**************************
+            // Odaya her yeni biri girdiğinde odadaki herkese soruları tekrar yolluyo verimsiz bir durum bu.
+            // Düzelt Bunu sonra
+            io.to(roomId).emit(categoryId, {    
+                    questions: currentQuestions,
+                    theRoomId: roomId,
+                    currentTimeInSeconds: mycurrentTimeInSeconds,
+                    connectionIndex: connectionIndx 
+            });   
+  // *********************** ÖNEMLİ !!!!!!!!!!!!!!!!!**************************
+          
+            if(roomObject[0].numUsers == 3){
+                 roomObject.pop();
+                 roomObject.pop();
+            }
 
-
-                              console.log("newGame START"); 
-                              console.log(newGame);
-                              console.log("newGame END");
-                              // save the user
-                              newGame.save(function(err) {
-                                  if (err)
-                                  {
-                                      console.log(err);
-                                      throw err;
-                                  }
-
-                                  console.log('Score Array INSERTED');
-                              });
-
-                              isGameExist(info.socketConnectedTo , info.categoryid , function(err, tmpgame){
-
-                                  console.log("GAME NAME  ---> " + info.socketConnectedTo);
-                                  console.log("CATEGORY  ----> " + info.categoryid);
-
-                                  if(tmpgame.length > 0)
-                                  {
-                                      console.log("Other Users exist ---> " + tmpgame.length);
-                                      for(var tmpindex = 0 ; tmpindex < tmpgame.length ; tmpindex++)
-                                      {
-                                          tmpgame[tmpindex].gameContent = gameContentArray;
-                                          tmpgame[tmpindex].save();
-                                      }
-                                  }
-                                  else
-                                  {
-                                      console.log("Other Users DOESNT EXIST ---> " + tmpgame.length);
-                                  }
-
-                              });
-                          }
-                          else
-                          {
-                              console.log("GAME  EXISTS");
-
-/*
-                              for(var ind = 0 ; ind < (scoresArray[i].length - 1) ; ind++)
-                              {
-                                  console.log("ARRAY LENGTH " + ind);
-                                  console.log("scoresArray[i][ind + 1]" + JSON.stringify(scoresArray[i][ind + 1]));
-                                  if((info.categoryid) === (scoresArray[i][ind + 1].categoryid))
-                                  {
-                                      tmpgameContentArray[ind] = scoresArray[i][ind + 1];
-                                  }
-
-                              }
-                              gameContentArray = cleanArray(tmpgameContentArray);
-
-                              game[0].gameContent = gameContentArray;
-                              game[0].save();
-
-                              console.log('Record Updated...');
-*/
-
-                          }
-                      });
-
-/*
-
-                      isGameExist(info.socketConnectedTo , info.categoryid , function(err , game)
-                      {
-                          console.log("info.username ---> " + info.username );
-                          console.log("info.socketConnectedTo ---> " + info.socketConnectedTo);
-                          console.log("info.categoryid ----> " + info.categoryid);
-
-                          if(game.length === 0)
-                          {
-                              console.log("GAME DOES NOT EXIST");
-
-                              for(var ind = 0 ; ind < (scoresArray[i].length - 1) ; ind++)
-                              {
-                                  console.log("ARRAY LENGTH " + ind);
-                                  console.log("scoresArray[i][ind + 1]" + JSON.stringify(scoresArray[i][ind + 1]));
-                                  if((info.categoryid) === (scoresArray[i][ind + 1].categoryid))
-                                  {
-                                      tmpgameContentArray[ind] = scoresArray[i][ind + 1];
-                                  }
-
-                              }
-                              gameContentArray = cleanArray(tmpgameContentArray);
-
-/!*                              if(scoresArray[i].length === 2)
-                              {
-                                  console.log("ARRAY LENGTH 2");
-                                  gameContentArray=  [scoresArray[i][1]];
-                              }
-                              else if(scoresArray[i].length === 3)
-                              {
-                                  console.log("ARRAY LENGTH 3");
-                                  gameContentArray=  [scoresArray[i][1], scoresArray[i][2]];
-                              }*!/
-
-                              console.log("tmpgameContentArray  --->" + JSON.stringify(tmpgameContentArray));
-                              console.log("gameContentArray  --->" + JSON.stringify(gameContentArray));
-
-                              //newGame.gameId = i;
-                              //newGame.username = info.username;
-                              newGame.gamename = info.socketConnectedTo;
-                              newGame.categoryid = info.categoryid;
-                              newGame.categoryname = info.categoryname;
-                              newGame.gameContent = gameContentArray;
-                              console.log("newGame START");
-                              console.log(newGame);
-                              console.log("newGame END");
-                              // save the user
-                              newGame.save(function(err) {
-                                  if (err)
-                                  {
-                                      console.log(err);
-                                      throw err;
-                                  }
-
-                                  console.log('Score Array INSERTED');
-                              });
-                          }
-                          else
-                          {
-                              console.log("GAME  EXISTS");
-
-                              for(var ind = 0 ; ind < (scoresArray[i].length - 1) ; ind++)
-                              {
-                                  console.log("ARRAY LENGTH " + ind);
-                                  console.log("scoresArray[i][ind + 1]" + JSON.stringify(scoresArray[i][ind + 1]));
-                                  if((info.categoryid) === (scoresArray[i][ind + 1].cattmpgame.lengthegoryid))
-                                  {
-                                      tmpgameContentArray[ind] = scoresArray[i][ind + 1];
-                                  }
-
-                              }
-                              gameContentArray = cleanArray(tmpgameContentArray);
-
-                              game[0].gameContent = gameContentArray;
-                              game[0].save();
-
-                                  console.log('Record Updated...');
-
-                          }
-
-                      });
-
-*/
-/*
-                      if(scoresArray[i].length === 2)
-                      {
-                          console.log("ARRAY LENGTH 2");
-                          gameContentArray=  [scoresArray[i][1]];
-                      }
-                      else if(scoresArray[i].length === 3)
-                      {
-                          console.log("ARRAY LENGTH 3");
-                          gameContentArray=  [scoresArray[i][1], scoresArray[i][2]];
-                      }
-
-                      //newGame.gameId = i;
-                      newGame.username = info.username;
-                      newGame.gamename = info.socketConnectedTo;
-                      newGame.categoryid = info.categoryid;
-                      newGame.categoryname = info.categoryname;
-                      newGame.gameContent = gameContentArray;
-                      console.log("newGame START");
-                      console.log(newGame);
-                      console.log("newGame END");
-                      // save the user
-                      newGame.save(function(err) {
-                          if (err)
-                          {
-                              console.log(err);
-                              throw err;
-                          }
-
-                          console.log('Score Array INSERTED');
-                      });
-*/
-
-
-                      /////////////////////////////OZan//////////////
-
-
-                      io.to(infoForRankings.socketInfo).emit('score', {
-                                scoresArray: scoresArrayJson
-                      });
-
-                      console.log("for içi IF İÇİ scoresArray[i].length 2 = " 
-                      + scoresArray[i].length + " *** İ = " + i);
-                      
-
-                      if(scoresArray[i].length == 4){ // 4 olmasının nedeni 
-                          // başta(scoresArray[0]) bi de username olması. Buraya bi de || koyup yarışmanın zaman sınırı doldugunda emit et de
-
-                         console.log("for içi IF İÇİ infoForRankings.socketInfo = " 
-                         + infoForRankings.socketInfo);
-
-                          arrayToClient = sortScoresArray(scoresArray[i]);
-                          
-                          var scoresArrayJson = JSON.stringify(arrayToClient);
-
-///////////////////////////////////////////////// OZAN 3 START /////////////////////////////////////////////////
-
-                          isGameExist(info.socketConnectedTo , info.categoryid , function(err, tmpgame){
-
-                              console.log("COMPLETED GAME NAME  ---> " + info.socketConnectedTo);
-                              console.log("COMPLETED CATEGORY  ----> " + info.categoryid);
-
-                              if(tmpgame.length > 0)
-                              {
-                                  console.log("Other Users exist ---> " + tmpgame.length);
-                                  for(var tmpindex = 0 ; tmpindex < tmpgame.length ; tmpindex++)
-                                  {
-                                      tmpgame[tmpindex].completed = 1;
-                                      tmpgame[tmpindex].save();
-                                  }
-                              }
-                              else
-                              {
-                                  console.log("Other Users DOESNT EXIST ---> " + tmpgame.length);
-                              }
-
-                          });
-
-///////////////////////////////////////////////// OZAN 3 END /////////////////////////////////////////////////
-                       
-                        /////////////////////////////OZan//////////////
-
-                          io.to(infoForRankings.socketInfo).emit('score', {
-                                scoresArray: scoresArrayJson
-                          });
-                     
-                         console.log("for içi IF İÇİ EMIT Sonrası" + scoresArrayJson);
-                          
-                      }
-                      
-                      console.log("for içi IF İÇİ scoresArray[i] = " + scoresArray[i]);
-                      break;
-                  }
-              }                                  
-
-              function findRoomObject(socketos) { 
-                  return socketos.roomId === info.socketConnectedTo;
-              }
-              scoresArray.find(findRoomObject);
-
-        /*
-
-              console.log("socket.on(score) içi 0 " + " length = " + scoresArray.length);
-              console.log("socket.on(score) içi 1 " + infoForRankings.socketInfo + " " + infoForRankings.scoreInfo + " " + infoForRankings.usernameInfo);
-              
-              console.log("socket.on(score) içi 3 " + allRoomsArray.find(findRoomObject) + " " + info.username); // { name: 'cherries', quantity: 5 }
-                */
-
-    });
-
-
-socket.on('gameHistory', function(params){
-
-        var curreTimeInSeconds = Math.round(new Date().getTime()/1000);
-        deleteTimeoutGames(curreTimeInSeconds);
-        findAllGamesWUsername(params.username , function(err , games) {
-        console.log("socket.on gameHistory içi GAMES = " + games +" USERNAME = " + params.username
-        + "  length = " + games.length );                          
-
-            if(games.length > 0)
-                {
-                    io.emit('gameHistory', {gamesHistory: games});
-                       /* io.to(infoForRankings.socketInfo).emit('gamesHistory', {
-                                gamesHistory: games
-                      });*/
-                }
-        console.log("EMIT GERCEKLESTİ ****** ");    
-        })
-   });
-});
+            // roomObject = emptyroomObject(roomObject);
+            console.log("There is availble room  = " + roomObject.length);           
+         }
+}
