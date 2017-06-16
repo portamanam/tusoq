@@ -28,7 +28,7 @@ var io = require('socket.io')(server);
 //var mongoHost = process.env[mongoServiceName + '_SERVICE_HOST'];
 //var mongoURL = 'mongodb://localhost:27017/swot';
 //var mongoURL = 'mongodb://' + process.env.OPENSHIFT_MONGODB_DB_HOST + ':' + process.env.OPENSHIFT_MONGODB_DB_PORT + '/sampledb'';
-var mongoURL = 'mongodb://userD2E:X1wbDQLqUSD1ot4w@mongodb/sampledb';
+
 //var mongoURL = 'mongodb://localhost:27017/sampledb';
 
 //var port = process.env.PORT || process.env.OPENSHIFT_NODEJS_PORT || 3100;
@@ -43,7 +43,8 @@ var FacebookStrategy = require('passport-facebook').Strategy;
 var async = require('async');
 var nodemailer = require('nodemailer');
 var router      =   express.Router();
-var mongoURL = 'mongodb://userD2E:X1wbDQLqUSD1ot4w@mongodb/sampledb';
+// mongoURL = 'mongodb://userD2E:X1wbDQLqUSD1ot4w@mongodb/sampledb';
+var mongoURL = 'mongodb://user2GO:nLXfHKg7MsyCxuVn@mongodb/sampledb';
 mongoose.connect(mongoURL);
 
 // Configure app to use validation system with our config (custom rules)
