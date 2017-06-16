@@ -36,7 +36,7 @@ var port = process.env.PORT || process.env.OPENSHIFT_NODEJS_PORT || 8080;
 var ip   = process.env.IP   || process.env.OPENSHIFT_NODEJS_IP || '0.0.0.0';
 
 var port = process.env.PORT || 3100;
->>>>>>> 5c394c7b8bd066bf88c64eb93d79c2a82d4e7cce
+
 var passport = require('passport');
 var LocalStrategy = require('passport-local').Strategy;
 var FacebookStrategy = require('passport-facebook').Strategy;
