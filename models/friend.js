@@ -248,7 +248,6 @@ const Friend = function (mongoose) {
         }else{
           response.err = err;
         }
-
         if(callback){
           callback(response);
         }

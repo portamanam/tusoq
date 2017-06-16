@@ -13,7 +13,5 @@ var topicSchema  = {
     "subtopics"   : [Number],
     "quizzes"     : [mongoSchema.Types.ObjectId],
     "_v"          : Number
-
-
 };
 module.exports = mongoose.model('topics',topicSchema);;

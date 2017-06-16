@@ -1,8 +1,8 @@
 var mongoose    =   require("mongoose");
 //mongoose.connect('mongodb://localhost:27017/tempswot');
 var mongoSchema =   mongoose.Schema;
-var GameRequestSchema  = {                      // BURDA NIYE new mongoSchema demiyo.
-    "currentTimeInSeconds": Number,    
+var FriendChallengedGameSchema  = {                      // BURDA NIYE new mongoSchema demiyo.
+    "currentTimeInSeconds": Number,
     "invitingusername" : String,
     "invitedusername" : String,
     "invitinguserid" : String,
@@ -13,9 +13,8 @@ var GameRequestSchema  = {                      // BURDA NIYE new mongoSchema de
         "correctAnswerIndex" : Number,
         "supplementalInfoHtml" : String,
         "questionHtml" : String,
-        "choices" : [String]-
+        "choices" : [String]
     }],*/
-  //  "currentTime" : Number,
     "timeoutTime" : Number,
     "isExpired"   : Boolean,
     "isDeclined"  : Boolean,
@@ -28,4 +27,4 @@ var GameRequestSchema  = {                      // BURDA NIYE new mongoSchema de
     "completed": Number,
     "isCurrentViewerDeletedDiv": Boolean
 };
-module.exports = mongoose.model('gamerequests',GameRequestSchema);
+module.exports = mongoose.model('friendchallengedgames',FriendChallengedGameSchema);
