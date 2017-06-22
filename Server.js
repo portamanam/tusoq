@@ -46,7 +46,7 @@ var router      =   express.Router();
 // mongoURL = 'mongodb://userD2E:X1wbDQLqUSD1ot4w@mongodb/sampledb';
 //var mongoURL = 'mongodb://localhost:27017/sampledb';
 //var mongoURL = 'mongodb://user2GO:nLXfHKg7MsyCxuVn@0.0.0.0:27017/sampledb';
-var mongoURL = 'mongodb://user2GO:nLXfHKg7MsyCxuVn@mongodb/sampledb';
+var mongoURL = 'mongodb://userD4J:udvEGQJgtfTrPMMM@mongodb/sampledb';
 mongoose.connect(mongoURL);
 
 // Configure app to use validation system with our config (custom rules)
