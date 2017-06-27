@@ -2,6 +2,7 @@ var mongoose    =   require("mongoose");
 //mongoose.connect('mongodb://localhost:27017/tempswot');
 var mongoSchema =   mongoose.Schema;
 var GameRequestSchema  = {                      // BURDA NIYE new mongoSchema demiyo.
+    "typeOf" : String,
     "currentTimeInSeconds": Number,    
     "invitingusername" : String,
     "invitedusername" : String,

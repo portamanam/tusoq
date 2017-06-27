@@ -22,32 +22,14 @@ var app = express();
 var server = require('http').createServer(app);
 
 var io = require('socket.io')(server);
-
-//var port = process.env.PORT || 3100;
-//var mongoServiceName = process.env.DATABASE_SERVICE_NAME.toUpperCase();
-//var mongoHost = process.env[mongoServiceName + '_SERVICE_HOST'];
-//var mongoURL = 'mongodb://localhost:27017/swot';
-//var mongoURL = 'mongodb://' + process.env.OPENSHIFT_MONGODB_DB_HOST + ':' + process.env.OPENSHIFT_MONGODB_DB_PORT + '/sampledb'';      
-
-//var mongoURL = 'mongodb://localhost:27017/sampledb';
-
-//var port = process.env.PORT || process.env.OPENSHIFT_NODEJS_PORT || 3100;
-var port = process.env.PORT || process.env.OPENSHIFT_NODEJS_PORT || 8080;
-var ip   = process.env.IP   || process.env.OPENSHIFT_NODEJS_IP || '0.0.0.0';
-
-//var port = process.env.PORT || 3100;
-
+var port = process.env.PORT || 3100;
 var passport = require('passport');
 var LocalStrategy = require('passport-local').Strategy;
 var FacebookStrategy = require('passport-facebook').Strategy;
 var async = require('async');
 var nodemailer = require('nodemailer');
 var router      =   express.Router();
-// mongoURL = 'mongodb://userD2E:X1wbDQLqUSD1ot4w@mongodb/sampledb';
-//var mongoURL = 'mongodb://localhost:27017/sampledb';
-//var mongoURL = 'mongodb://user2GO:nLXfHKg7MsyCxuVn@0.0.0.0:27017/sampledb';
-var mongoURL = 'mongodb://userD4J:udvEGQJgtfTrPMMM@mongodb/sampledb';
-mongoose.connect(mongoURL);
+mongoose.connect('mongodb://localhost:27017/swot');
 
 // Configure app to use validation system with our config (custom rules)
 var expressValidator = require('express-validator');
@@ -111,7 +93,7 @@ passport.use(new LocalStrategy(function(username, password, done) {
 passport.use(new FacebookStrategy({
     clientID: '1301406996598081',
     clientSecret: '265c7bf3e223e09773ce4b49225d4c54',
-    callbackURL: "http://0.0.0.0:8080/auth/facebook/callback"
+    callbackURL: "http://localhost:3100/auth/facebook/callback"
   },
  
  // facebook will send back the token and profile 
@@ -346,7 +328,6 @@ router.route("/user/logout")
 
 server.listen(port, function () {
   console.log('Server HIHIHIH listening at port %d', port);
-  console.log('Server HIHIHIH listening at port %d', ip);
 });
 
 var theRoom = { 
@@ -503,17 +484,110 @@ function findRandomChallengedGamesWUsername(myuserId, callback)
         }
     });
 }
-function findFriendChallengedGameHistoryWUsername(myuserId, callback)
-{   console.log("findFriendChallengedGameHistoryWUsername myuserId = " + myuserId)
+function findFriendChallengedGameHistoryWUsername(myuserId, mycurrenttimeinseconds, callback)
+{ 
     var userId = myuserId;
     FriendChallengedGames.find({usersThatDidntDeleteGame : userId}, function(err, games) {
+        // .find diyince array oluşturup onun içine atıyor bi tane bile eleman olsa
+        // .findOne diyince bir tane bulup onu tekli olarak koyuor bir tane sonuç olduğu kesin olduğu için.
         if (err) {
             callback(err, null);
-        } else {
-            callback(null, games);
+        } 
+        else {
+           console.log("findFriendChallengedGameHistoryWUsername games.length = " + games.length)            
+            
+            for(i=0; i<games.length; i++){
+               console.log("games[i] = " + games[i] );               
+               
+               if(games[i].timeoutTime <= mycurrenttimeinseconds && games[i].completed == 0){
+                    games[i].isExpired = true;
+                    games[i].timeLeft = 0;   
+               }
+               else if(games[i].completed == 1)
+                    games[i].timeLeft = 0; 
+               else 
+                    games[i].timeLeft = mycurrenttimeinseconds - games[i].timeoutTime;              
+            }
+
+            callback(null, games);            
         }
     });
 }
+
+function getGameRequestListForUserId(myuserId, mycurrenttimeinseconds, callback)
+{
+    console.log("getGameRequestListForUserId içi userID = " + myuserId);
+    var userId = myuserId;
+
+    GameRequests.find({usersThatDidntDeleteGame : userId}, function(err, games) {
+     if (err) {
+        callback(err, null);
+     }
+     else {
+        for(i=0; i<games.length; i++){
+            console.log("games[i] = " + games[i] );               
+            
+            if(games[i].timeoutTime <= mycurrenttimeinseconds && games[i].completed == 0){
+                games[i].isExpired = true;
+                games[i].timeLeft = 0;   
+            }
+            else if(games[i].completed == 1)
+                games[i].timeLeft = 0; 
+            else 
+                games[i].timeLeft = mycurrenttimeinseconds - games[i].timeoutTime;              
+        }
+
+        console.log("getGameRequestListForUsername requestListForUsername = " + JSON.stringify(games));
+        callback(null, games);
+
+           /* requestListForUsername.forEach(function(){
+                count++;
+                console.log("getGameRequestListForUsername COUNT = " + count);
+                //callback(null, requestListForUsername);
+                array.push(requestListForUsername);
+            });*/   
+/*
+      * Performs the specified action for each element in an array.
+      * @param callbackfn  A function that accepts up to three arguments. forEach calls the callbackfn function one time for each element in the array.
+      * @param thisArg  An object to which the this keyword can refer in the callbackfn function. If thisArg is omitted, undefined is used as the this value.
+      */
+ //   forEach(callbackfn: (value: T, index: number, array: T[]) => void, thisArg?: any): void;
+     
+        }
+    });
+};
+function checkFriendChallegedTimeoutGames(mycurrenttimeinseconds)
+{
+    FriendChallengedGames.find({'timeoutTime' : {$lte : mycurrenttimeinseconds, $ne: null} },function(err,games) {
+        if (err) {
+            callback(err, null);
+        } else {
+            console.log("function check FriendChallegedTimeoutGames içi games = " + games.length)
+            for(i=0; i<games.length; i++){
+                games[i].isExpired = true;  
+                console.log("function checkFriendChallegedTimeoutGames for içi games[i] = " + games[i]);
+            }
+        }
+        
+    });
+}
+function checkGameRequestsTimeouts(mycurrenttimeinseconds)
+{
+    GameRequests.find({'timeoutTime' : {$lte : mycurrenttimeinseconds, $ne: null} },function(err,gamerequest) {       
+        
+        console.log("checkGameRequestsTimeouts = " + mycurrenttimeinseconds);
+        console.log("function checkGameRequestsTimeouts içi games = " + gamerequest[0])
+        
+        for(i=0; i<gamerequest.length; i++){
+            gamerequest[i].isExpired = true; 
+            gamerequest[i].save(function(err)
+            {
+                if (err) throw err;
+            });     
+        }
+    });
+};
+
 
 function deleteUserFromRandomChallengedSchema(currentTimeInSeconds, roomid, useridtobedeleted, callback)//Friend challengellar için
 {
@@ -680,9 +754,9 @@ function updateGameScoreInfo(currentTimeInSeconds, invitinguserid , inviteduseri
             //gamerequest.usersThatDidntDeleteGame.push(infoForRankings.updaterUsername);
 
             if(gamerequest.scoreArrayForChallengeRank.length==2)
-                gamerequest.completed=1;
+                gamerequest.completed = 1;
             else
-                gamerequest.completed=0;
+                gamerequest.completed = 0;
                 
             gamerequest.save(function (err) {
                 if(err) 
@@ -748,18 +822,13 @@ function updateQuestionsGameRequestInfo(myinvitingusername , myinvitedusername ,
     });
 };
 
-function insertGamesFromGameRequests(mycurrentTimeInSeconds, myinvitingusername, myinvitedusername, myinvitinguserid, myinviteduserid, mycategoryid, mycategoryname, mytimeouttime, myisexpired, scoreInfoArray, mycompleted, myisCurrentViewerDeletedDiv)
+function insertFriendChallengedGameFromGameRequest(mytypeOf, mycurrentTimeInSeconds, myinvitingusername, myinvitedusername, myinvitinguserid, myinviteduserid, mycategoryid, mycategoryname, mytimeouttime, myisexpired, scoreInfoArray, mycompleted, myisCurrentViewerDeletedDiv)
 {
-   // console.log(" insertGamesFromGameRequests'e GİRDİ scoreArray = " + scoreInfoArray)
    
-    var scoreInfoObjectForChallengeRanking = {userScore : 0,
-                                           userTime : 0,
-                                           username : ''    }
-    //var scoreInfoArray = [];
-
     var mytimeouttime = mytimeouttime + 120; // Adam oyunu kabul ettikten sonra timeout time a ek süre ekliyoz.
 
     var newGame = FriendChallengedGames({
+        typeOf: mytypeOf,
         currentTimeInSeconds: mycurrentTimeInSeconds, 
         invitingusername : myinvitingusername,
         invitedusername : myinvitedusername,
@@ -786,7 +855,7 @@ function insertGamesFromGameRequests(mycurrentTimeInSeconds, myinvitingusername,
 
 }
 
-function insertGameRequest(mycurrentTimeInSeconds, myinvitingusername, myinvitedusername, myinvitinguserid, myinviteduserid, mycategoryid, mycategoryname, myisexpired, mycompleted, myisdeclined, myisCurrentViewerDeletedDiv, callback)
+function insertGameRequest(mytypeOf, mycurrentTimeInSeconds, myinvitingusername, myinvitedusername, myinvitinguserid, myinviteduserid, mycategoryid, mycategoryname, myisexpired, mycompleted, myisdeclined, myisCurrentViewerDeletedDiv, callback)
 {
     console.log(" insertGameRequest'e GİRDİ currentTimeInSeconds = " + mycurrentTimeInSeconds + " myinvitinguserid = " + myinvitinguserid + " myinviteduserid = " + myinviteduserid)
 
@@ -800,6 +869,7 @@ function insertGameRequest(mycurrentTimeInSeconds, myinvitingusername, myinvited
  //   scoreInfoArray.push(scoreInfoObjectForChallengeRanking);
 
     var newGameRequest = GameRequests({
+        typeOf: mytypeOf,
         currentTimeInSeconds : mycurrentTimeInSeconds,
         invitingusername : myinvitingusername,
         invitedusername : myinvitedusername,
@@ -850,7 +920,6 @@ function setFriendChallengeQuestions(mycurrentTimeInSeconds, myinvitinguserid , 
 {
     console.log(" setFriendChallengeQuestions'e GİRDİ currentTimeInSeconds = " + mycurrentTimeInSeconds);
 
-    var timeoutValue = 60;
 
     var newGameQuestions = QuestionsForFriendChallenge({
         currentTimeInSeconds: mycurrentTimeInSeconds,
@@ -860,13 +929,11 @@ function setFriendChallengeQuestions(mycurrentTimeInSeconds, myinvitinguserid , 
         categoryname : mycategoryname,
         questions : myquestiondata,
         //currentTime : curTimeInSeconds,
-        timeoutTime : mycurrentTimeInSeconds + timeoutValue,
     });
 
     newGameQuestions.save(function(err)
     {
         if (err){
-          throw err;
           callback(err,null)
         } 
         console.log("setFriendChallengeQuestions SAVED");
@@ -884,38 +951,6 @@ function getFriendChallengeQuestions(mycurrenttimeinseconds, myinvitinguserid, m
             callback(err, null);
         } else {
             callback(null, questions[0]);
-        }
-    });
-};
-
-function getGameRequestListForUserId(myuserId , callback)
-{
-    console.log("getGameRequestListForUserId içi userID = " + myuserId);
-    var array = [];
-    var userId = myuserId;
-
-    GameRequests.find({usersThatDidntDeleteGame : userId}, function(err, game) {
-     if (err) {
-        callback(err, null);
-     }
-     else {
-        console.log("getGameRequestListForUsername requestListForUsername = " + JSON.stringify(game));
-        array.push(game);
-
-           /* requestListForUsername.forEach(function(){
-                count++;
-                console.log("getGameRequestListForUsername COUNT = " + count);
-                //callback(null, requestListForUsername);
-                array.push(requestListForUsername);
-            });*/   
-/*
-      * Performs the specified action for each element in an array.
-      * @param callbackfn  A function that accepts up to three arguments. forEach calls the callbackfn function one time for each element in the array.
-      * @param thisArg  An object to which the this keyword can refer in the callbackfn function. If thisArg is omitted, undefined is used as the this value.
-      */
- //   forEach(callbackfn: (value: T, index: number, array: T[]) => void, thisArg?: any): void;
-     
-        callback(null, array);
         }
     });
 };
@@ -976,39 +1011,6 @@ function deleteGameRequestInfo(mycurrenttimeinseconds, myinvitinguserid , myinvi
 
     GameRequests.find({'currentTimeInSeconds': mycurrenttimeinseconds,'invitinguserid' : myinvitinguserid , 'inviteduserid' : myinviteduserid, 'categoryid' : mycategoryid}).remove().exec();
     console.log('Requested GameRequestInfo is removed from list SSSSSSSSSSSSSSSSSS');
-};
-
-function checkGameRequestsTimeouts(mycurrenttimeinseconds)
-{
-    GameRequests.find({'timeoutTime' : {$lte : mycurrenttimeinseconds, $ne: null} },function(err,gamerequest) {       
-        
-        console.log("checkGameRequestsTimeouts = " + mycurrenttimeinseconds);
-        console.log("function checkGameRequestsTimeouts içi games = " + gamerequest[0])
-        
-        for(i=0; i<gamerequest.length; i++){
-            gamerequest[i].isExpired = true; 
-            gamerequest[i].save(function(err)
-            {
-                if (err) throw err;
-            });     
-        }
-    });
-};
-
-function checkFriendChallegedTimeoutGames(mycurrenttimeinseconds)
-{
-    FriendChallengedGames.find({'timeoutTime' : {$lte : mycurrenttimeinseconds, $ne: null} },function(err,games) {
-        if (err) {
-            callback(err, null);
-        } else {
-            console.log("function check FriendChallegedTimeoutGames içi games = " + games.length)
-            for(i=0; i<games.length; i++){
-                games[i].isExpired = true;  
-                console.log("function checkFriendChallegedTimeoutGames for içi games[i] = " + games[i]);
-            }
-        }
-        
-    });
 };
 
 function deleteRandomChallegedTimeoutGames(mycurrenttimeinseconds)
@@ -1371,8 +1373,7 @@ router.route("/gamerequest/accept/:currentTimeInSeconds/:invitingusr/:invitedusr
     var currentTimeInSeconds = req.params.currentTimeInSeconds
     console.log('/gamerequest/accept/ PARAMETRELERİ = ' + invitinguserid + ' ' + inviteduserid + ' ' + gamereqcategoryid + ' TIME = ' + currentTimeInSeconds);
 
-    getFriendChallengeQuestions(currentTimeInSeconds, invitinguserid , inviteduserid, gamereqcategoryid, function(err, data) {
-        
+    getFriendChallengeQuestions(currentTimeInSeconds, invitinguserid , inviteduserid, gamereqcategoryid, function(err, data) {        
             if (err)
             {
                 console.log(err);
@@ -1381,8 +1382,6 @@ router.route("/gamerequest/accept/:currentTimeInSeconds/:invitingusr/:invitedusr
             else if(data != null)
             {
                 console.log('QUESTIONS IN ACCEPT ARE = ' + data.questions);
-
-                //insertGamesAccepted(invitingusername , invitedusername, gamereqcategoryid, data.categoryname , data.questions , gameContentArray);
                 //insertGamesFromGameRequests(invitingusername, invitedusername, gamereqcategoryid, gamereqcategoryname, data.timeoutTime)
 
                 res.status(200).json(data.questions);
@@ -1394,8 +1393,7 @@ router.route("/gamerequest/accept/:currentTimeInSeconds/:invitingusr/:invitedusr
             }
     });
 
-    getGameRequestInfo(currentTimeInSeconds, invitinguserid , inviteduserid, gamereqcategoryid, function(err, data) {
-        
+    getGameRequestInfo(currentTimeInSeconds, invitinguserid , inviteduserid, gamereqcategoryid, function(err, data) {       
             if (err)
             {
                 console.log(err);
@@ -1404,11 +1402,10 @@ router.route("/gamerequest/accept/:currentTimeInSeconds/:invitingusr/:invitedusr
             else if(data != null)
             {
                 console.log('/gamerequest/accept getGameRequestInfo ELSE İÇİ');
-                insertGamesFromGameRequests(currentTimeInSeconds, invitingusername, invitedusername, invitinguserid, inviteduserid, gamereqcategoryid, gamereqcategoryname, data.timeoutTime, data.isExpired, data.scoreArrayForChallengeRank, data.completed, data.isCurrentViewerDeletedDiv);
+                insertFriendChallengedGameFromGameRequest(data.typeOf, currentTimeInSeconds, invitingusername, invitedusername, invitinguserid, inviteduserid, gamereqcategoryid, gamereqcategoryname, data.timeoutTime, data.isExpired, data.scoreArrayForChallengeRank, data.completed, data.isCurrentViewerDeletedDiv);
                // data.usersThatDidntDeleteGame.push(invitedusername);
                 
                 deleteGameRequestInfo(currentTimeInSeconds, invitinguserid , inviteduserid, gamereqcategoryid);
-
             }
             else if(data == null)
             {
@@ -1449,6 +1446,7 @@ router.route("/gamerequest/decline/:currentTimeInSeconds/:invitingusrId/:invited
             gamerequest[0].save(function(err){
                 if (err) throw err;
                 else console.log('Game request DECLINED with Inviting User ' + invitinguserid + ' Invited user ' + inviteduserid + ' decliningusername ' + decliningusername);
+                res.status(200).json({"error" : false,"message" : "Succesfully Declined"});
             }); 
         }
     });
@@ -1458,9 +1456,7 @@ router.route("/gamerequest/decline/:currentTimeInSeconds/:invitingusrId/:invited
 
 router.route("/game/updatescore/:currentTimeInSeconds/:invitingusrId/:invitedusrId/:categoryid/:score/:finalTime/:updaterUsername")
     .get(function (req, res) {
-// game/updatescore/1496419745/58f6170e72a5ba07aa8995e2/58f6172e72a5ba07aa8995e3/5770dc681a46fbcd071b5617/20/1.03/vcvc 
-    //  var invitingusername = req.params.invitingusr;
-    //  var invitedusername = req.params.invitedusr;
+ 
         var invitinguserid = req.params.invitingusrId;
         var inviteduserid = req.params.invitedusrId;
         var gamereqcategoryid = req.params.categoryid;
@@ -1484,7 +1480,7 @@ router.route("/game/updatescore/:currentTimeInSeconds/:invitingusrId/:invitedusr
        // updateAcceptedGameScoreInfo(invitingusername , invitedusername, gamereqcategoryid, usernameupdated , score);
        updateGameScoreInfo(currentTimeInSeconds, invitinguserid, inviteduserid, gamereqcategoryid, infoForRankings,function(err, scoreArrayForChallengeRank)
          {
-             if (err)
+            if (err)
             {
                 console.log(err);
                 response = {"error" : true,"message" : "There is not any record"};
@@ -1511,15 +1507,15 @@ router.route("/game/getscore/:invitingusr/:currentTimeInSeconds/:invitedusr/:cat
 
         getAcceptedGameScoreInfoByUsername(currentTimeInSeconds,invitingusername , invitedusername , gamereqcategoryid, usernameupdated, function(err, data) 
         {
-                for(i = 0 ; i < data.gameContent.length ; i++)
+            for(i = 0 ; i < data.gameContent.length ; i++)
+            {
+                if(data.gameContent[i].usernameInfo === usernameupdated)
                 {
-                    if(data.gameContent[i].usernameInfo === usernameupdated)
-                    {
-                        getscore = data.gameContent[i].scoreInfo;
-                        res.status(200).json(getscore);
-                        break;
-                    }
+                    getscore = data.gameContent[i].scoreInfo;
+                    res.status(200).json(getscore);
+                    break;
                 }
+            }
         });
 })
 
@@ -1628,6 +1624,140 @@ router.route("/sentGameRequest/delete/:invitingusr/:invitedusr/:categoryid/:user
     })    
 */
 
+router.route("/game/classical/getquestions/:categoryId")
+    .get(function (req, res) {
+
+            var categoryNumber = req.params.categoryId;
+            console.log("CATEGORY ID   ********** " + categoryNumber );
+            var qNumber = 5;
+            var response = {};
+            var questionData = new Array(qNumber);
+
+            getQuestionsByCategory(categoryNumber, qNumber, function(err, data) {
+                if (err)
+                {
+                    console.log(err);
+                    response = {"error" : true,"message" : "There is not any record"};
+                }
+                else if(data != null && (qNumber > 0))
+                {
+                    var allQuestions = (data._doc).questions;
+                    var numQuestions = (data._doc.questions).length;
+                    var rndquestnumbers = new Array(qNumber);
+                    
+                    rndquestnumbers = _arrayRandom(qNumber, 0, numQuestions, true);
+                    for (var i = 0; i < qNumber; i++)
+                    {
+                        if(allQuestions != null && (qNumber <= numQuestions))
+                        {
+                            questionData[i] = allQuestions[rndquestnumbers[i]]._doc;
+                            response = {"error" : false, "message" : questionData};
+                        }
+                        else
+                        {
+                            response = {"error" : true,"message" : "Opps some parameter is wrong"};
+                        }
+                    }
+                }
+                else
+                {
+                    response = {"error" : true,"message" : "There is not any response"};
+                }
+                res.status(200).json(questionData);
+
+                // console.log("Response =  " + response);
+				console.log("questions emitten once");
+				console.log("*************************QUESTIONS FOR CLASSICAL GAME**********************");
+			    //console.log(questionData);
+                                
+            });             
+    })
+
+
+
+
+router.route("/gamerequest/friendchallenged/:invitingusr/:invitedusr/:invitingusrId/:invitedusrId/:categoryname/:categoryid")
+    .get(function (req, res) {
+            
+    // *************** SORU SAYISI !!!!!!!!!!!!! **********************
+        var qNumber = 5;
+    // *************** SORU SAYISI !!!!!!!!!!!!! **********************
+    
+    var invitingusername = req.params.invitingusr;
+    var invitedusername = req.params.invitedusr;
+    var invitinguserid = req.params.invitingusrId;
+    var inviteduserid = req.params.invitedusrId;
+    var gamereqcategoryid = req.params.categoryid;
+    var gamereqcategoryname = req.params.categoryname;
+    
+    var currentTimeInSeconds = Math.round(new Date().getTime()/1000);
+
+    console.log('/gamerequest/friendchallenged/: = ' + invitingusername + '  ' + invitedusername 
+                 +  '  ' + gamereqcategoryid+ ' ' + gamereqcategoryname + ' ' + ' ' + inviteduserid);
+
+    getQuestionsByCategory(gamereqcategoryid, qNumber, function(err, data) {
+        if (err)
+        {
+            console.log(err);
+            response = {"error" : true,"message" : "There is not any record"};
+        }
+        else if(data != null && (qNumber > 0))
+        {
+            console.log("****************** GETTING QUESTIONS ********************");
+            var allQuestions = (data._doc).questions;
+            var numQuestions = (data._doc.questions).length;
+            var rndquestnumbers = new Array(qNumber);
+            var questionData = new Array(qNumber);
+            rndquestnumbers = _arrayRandom(qNumber, 0, numQuestions, true);
+            for (var i = 0; i < qNumber; i++)
+            {
+                if(allQuestions != null && (qNumber <= numQuestions))
+                {
+                    questionData[i] = allQuestions[rndquestnumbers[i]]._doc;
+                    response = {"error" : false,"message" : questionData};
+                }
+                else
+                {
+                    response = {"error" : true,"message" : "Opps some parameter is wrong"};
+                }
+            }
+            //console.log("QUESTIONS IN GAMEREQUEST ARE = " + JSON.stringify(questionData) );
+            //updateQuestionsGameRequestInfo(mysocket.invitingusername , mysocket.invitedusername, mysocket.categoryid , questionData);
+
+            var isExpired = false;
+            var completed = 0;
+            var isDeclined = false;
+            var isCurrentViewerDeletedDiv = false; // client tarafı için kullanılıyolar bu. O anda appi kullanan userın div'i silince o divin kaybolmasını sağlamak için
+            var typeOf = 'friendchallenge';
+            insertGameRequest(typeOf, currentTimeInSeconds, invitingusername , invitedusername, invitinguserid, inviteduserid, gamereqcategoryid, gamereqcategoryname, isExpired, completed, isDeclined, isCurrentViewerDeletedDiv, function(err , newGameRequest) {                        
+
+                if(newGameRequest != null)
+                {
+                    console.log("insertGameRequest'ten gelen cevap = " + newGameRequest); 
+                }
+                else
+                    console.log(" ERROR !!! insert edilemedi!!!"); 
+                
+            });
+
+            setFriendChallengeQuestions(currentTimeInSeconds, invitinguserid, inviteduserid, gamereqcategoryid, gamereqcategoryname, questionData, function(err , newGameQuestions) {                        
+
+                if(newGameQuestions != null)
+                {
+                    // console.log("setFriendChallengeQuestions'ten gelen cevap = " + newGameQuestions); 
+                }
+                else
+                    console.log(" ERROR !!! sorular set edilemedi!!!"); 
+                
+            });
+
+            res.status(200).json(questionData);
+          
+        }
+
+    });
+})
+
 router.route("/gamerequest/list/:userId")
     .get(function (req, res) {
 
@@ -1635,10 +1765,10 @@ router.route("/gamerequest/list/:userId")
 
         var currentTimeInSeconds = Math.round(new Date().getTime()/1000);
        
-        checkGameRequestsTimeouts(currentTimeInSeconds);
+       // checkGameRequestsTimeouts(currentTimeInSeconds);
         
         var userId = req.params.userId;
-        getGameRequestListForUserId(userId, function(err, data)
+        getGameRequestListForUserId(userId, currentTimeInSeconds, function(err, data)
         {
             if (err)
             {
@@ -1659,18 +1789,19 @@ router.route("/gamerequest/list/:userId")
         });
 
 })
-/*
-router.route("/sentgamerequest/list/:invitingusr")
+
+router.route("/games/list/all/:userId")
     .get(function (req, res) {
 
-        console.log('/sentgamerequest/list/:invitingusr e girdi !!!! ' );
+        console.log('/games/list/all/:username e girdi !!!! ');
 
+        var dataToSend = [];
         var currentTimeInSeconds = Math.round(new Date().getTime()/1000);
        
-        checkGameRequestsTimeouts(currentTimeInSeconds);
-
-        var invitingusername = req.params.invitingusr;
-        getSentGameRequestListForUsername(invitingusername , function(err, data)
+       // checkGameRequestsTimeouts(currentTimeInSeconds);
+        
+        var userId = req.params.userId;
+        getGameRequestListForUserId(userId, currentTimeInSeconds, function(err, data)
         {
             if (err)
             {
@@ -1678,20 +1809,136 @@ router.route("/sentgamerequest/list/:invitingusr")
                 response = {"error" : true,"message" : "There is not any gamerequest record"};
             }
             else if(data != null)
-            {
-                console.log('/gamerequest/list/:invitedusr ELSE IF İÇİ data = ');
-                data.questions = null;
-                res.status(200).json(data);
+            {   
+              dataToSend = data;
             }
             else if(data == null)
             {
                 console.log('No game request exists.... ');
                 res.status(500).json({"error" : true,"message" : "There is not any gamerequest record"});
             }
-        });
-    })    
 
-*/
+            findRandomChallengedGamesWUsername(userId, function(err , gamesRandom) {
+        
+                console.log("randomChallengedGameHistory gameHistory içi GAMES = " + gamesRandom +" USERID = " + userId + "  length = " + gamesRandom.length);                          
+                if (err)
+                {   console.log(err);
+                    response = {"error" : true,"message" : "There is not any gamerequest record"};
+                }
+                else if(gamesRandom != null)
+                {
+                    dataToSend = dataToSend.concat(gamesRandom);
+                }
+                else if(gamesRandom == null)
+                {   console.log('No game request exists.... ');
+                    res.status(500).json({"error" : true,"message" : "There is not any gamerequest record"});
+                }
+
+                findFriendChallengedGameHistoryWUsername(userId, currentTimeInSeconds, function(err , gamesFriend) {
+         
+                    console.log("randomChallengedGameHistory gameHistory içi GAMES = " + gamesFriend + " USERID = " + userId + "  length = " + gamesFriend.length);                          
+
+                    if (err)
+                    {
+                        console.log(err);
+                        response = {"error" : true,"message" : "There is not any gamerequest record"};
+                    }
+
+                    else if(gamesFriend != null)
+                    {
+                        //  console.log('/gamerequest/list/:invitedusr ELSE IF İÇİ data = ' + data);
+                        dataToSend = dataToSend.concat(gamesFriend);
+                        console.log( " !!!!!!!!!!!! dataToSend = " + JSON.stringify(dataToSend));
+                        res.status(200).json(dataToSend);
+                        
+
+                    }
+                    else if(gamesfriend == null)
+                    {
+                        console.log('No game request exists.... ');
+                        res.status(500).json({"error" : true,"message" : "There is not any gamerequest record"});
+                    }
+                    console.log("EMIT GERCEKLESTİ ****** ");    
+                })
+            })
+
+        });
+
+})
+
+
+router.route("/randomChallengedGameHistory/list/:userId")
+    .get(function (req, res) {
+        
+    var currentTimeInSeconds = Math.round(new Date().getTime()/1000);
+                      
+    // ***************** Sonra kullanılcak bu ***********************
+    //  deleteRandomChallegedTimeoutGames(currentTimeInSeconds);
+    // ***************** Sonra kullanılcak bu ***********************
+    
+    var userId = req.params.userId;
+
+    findRandomChallengedGamesWUsername(userId, function(err , games) {
+        
+        console.log("randomChallengedGameHistory gameHistory içi GAMES = " + games +" USERID = " + userId + "  length = " + games.length);                          
+
+        if (err)
+        {
+            console.log(err);
+            response = {"error" : true,"message" : "There is not any gamerequest record"};
+        }
+
+        else if(games != null)
+        {
+            //  console.log('/gamerequest/list/:invitedusr ELSE IF İÇİ data = ' + data);
+            res.status(200).json(games);
+        }
+        else if(games == null)
+        {
+            console.log('No game request exists.... ');
+            res.status(500).json({"error" : true,"message" : "There is not any gamerequest record"});
+        }
+      console.log("EMIT GERCEKLESTİ ****** ");    
+    })
+
+})
+
+router.route("/friendChallengedGameHistory/list/:userId")
+    .get(function (req, res) {
+        
+    var currentTimeInSeconds = Math.round(new Date().getTime()/1000);
+                      
+    // ***************** Sonra kullanılcak bu ***********************
+    //  deleteRandomChallegedTimeoutGames(currentTimeInSeconds);
+    // ***************** Sonra kullanılcak bu ***********************
+    
+    var userId = req.params.userId;
+
+    findFriendChallengedGameHistoryWUsername(userId, currentTimeInSeconds, function(err , games) {
+         
+        console.log("randomChallengedGameHistory gameHistory içi GAMES = " + games + " USERID = " + userId + "  length = " + games.length);                          
+
+        if (err)
+        {
+            console.log(err);
+            response = {"error" : true,"message" : "There is not any gamerequest record"};
+        }
+
+        else if(games != null)
+        {
+            //  console.log('/gamerequest/list/:invitedusr ELSE IF İÇİ data = ' + data);
+            res.status(200).json(games);
+        }
+        else if(games == null)
+        {
+            console.log('No game request exists.... ');
+            res.status(500).json({"error" : true,"message" : "There is not any gamerequest record"});
+        }
+      console.log("EMIT GERCEKLESTİ ****** ");    
+    })
+
+})
+
 io.on('connection', function (socket) {
 
         console.log('a user connected with socket id ' + socket.id);
@@ -1701,7 +1948,7 @@ io.on('connection', function (socket) {
             deleteOnlineUserList(socket.id);
             console.log(socket.id + ' is Disconnected');            
         });
-
+/*
         socket.on('randomChallengedGameHistory', function(params){
 
             var currentTimeInSeconds = Math.round(new Date().getTime()/1000);
@@ -1710,7 +1957,7 @@ io.on('connection', function (socket) {
           //  deleteRandomChallegedTimeoutGames(currentTimeInSeconds);
           // ***************** Sonra kullanılcak bu ***********************
 
-            findRandomChallengedGamesWUsername(params.userId , function(err , games) {
+            findRandomChallengedGamesWUsername(params.userId, function(err , games) {
                 
                 console.log("randomChallengedGameHistory gameHistory içi GAMES = " + games +" USERID = " + params.userId + "  length = " + games.length);                          
 
@@ -1727,13 +1974,13 @@ io.on('connection', function (socket) {
 
                 var currentTimeInSeconds = Math.round(new Date().getTime()/1000);
             
-                //**************************************************************** */
+                //**************************************************************** 
                 //Bunu DÜZELT çok verimsiz. Her gameHistory isteyen için bütün gamerequestleri kontrol etmek olmaz
                
-                checkFriendChallegedTimeoutGames(currentTimeInSeconds);
+                    // checkFriendChallegedTimeoutGames(currentTimeInSeconds);
                
                 //****************************************************************
-                findFriendChallengedGameHistoryWUsername(params.userId , function(err , games) {
+                findFriendChallengedGameHistoryWUsername(params.userId, currentTimeInSeconds, function(err , games) {
                    
                     console.log("friendChallengedGameHistory içi GAMES = " + games +" USERID = " + params.userId
                     + "  length = " + games.length + " " + games.usersThatDidntDeleteGame );                          
@@ -1745,90 +1992,92 @@ io.on('connection', function (socket) {
                 console.log("EMIT GERCEKLESTİ ****** ");    
                 })
         });
+*/
 
-       socket.on('gamerequest', function(mysocket){
+
+    //    socket.on('gamerequest', function(mysocket){
             
-            console.log('gamerequest function içi mysocket değerleri = ' + mysocket.invitingusername + '  ' + mysocket.invitedusername 
-                +  '  ' + mysocket.categoryid + ' ' + mysocket.categoryname + ' ' + mysocket.invitinguserid + ' ' + mysocket.inviteduserid);
+    //         console.log('gamerequest function içi mysocket değerleri = ' + mysocket.invitingusername + '  ' + mysocket.invitedusername 
+    //             +  '  ' + mysocket.categoryid + ' ' + mysocket.categoryname + ' ' + mysocket.invitinguserid + ' ' + mysocket.inviteduserid);
 
-            // *************** SORU SAYISI !!!!!!!!!!!!! **********************
-                var qNumber = 5;
-            // *************** SORU SAYISI !!!!!!!!!!!!! **********************
+    //         // *************** SORU SAYISI !!!!!!!!!!!!! **********************
+    //             var qNumber = 5;
+    //         // *************** SORU SAYISI !!!!!!!!!!!!! **********************
 
-            getQuestionsByCategory(mysocket.categoryid, qNumber, function(err, data) {
-                if (err)
-                {
-                    console.log(err);
-                    response = {"error" : true,"message" : "There is not any record"};
-                }
-                else if(data != null && (qNumber > 0))
-                {
-                    console.log("****************** GETTING QUESTIONS ********************");
-                    var allQuestions = (data._doc).questions;
-                    var numQuestions = (data._doc.questions).length;
-                    var rndquestnumbers = new Array(qNumber);
-                    var questionData = new Array(qNumber);
-                    rndquestnumbers = _arrayRandom(qNumber, 0, numQuestions, true);
-                    for (var i = 0; i < qNumber; i++)
-                    {
-                        if(allQuestions != null && (qNumber <= numQuestions))
-                        {
-                            questionData[i] = allQuestions[rndquestnumbers[i]]._doc;
-                            response = {"error" : false,"message" : questionData};
-                        }
-                        else
-                        {
-                            response = {"error" : true,"message" : "Opps some parameter is wrong"};
-                        }
-                    }
-                  //console.log("QUESTIONS IN GAMEREQUEST ARE = " + JSON.stringify(questionData) );
-                  //updateQuestionsGameRequestInfo(mysocket.invitingusername , mysocket.invitedusername, mysocket.categoryid , questionData);
+    //         getQuestionsByCategory(mysocket.categoryid, qNumber, function(err, data) {
+    //             if (err)
+    //             {
+    //                 console.log(err);
+    //                 response = {"error" : true,"message" : "There is not any record"};
+    //             }
+    //             else if(data != null && (qNumber > 0))
+    //             {
+    //                 console.log("****************** GETTING QUESTIONS ********************");
+    //                 var allQuestions = (data._doc).questions;
+    //                 var numQuestions = (data._doc.questions).length;
+    //                 var rndquestnumbers = new Array(qNumber);
+    //                 var questionData = new Array(qNumber);
+    //                 rndquestnumbers = _arrayRandom(qNumber, 0, numQuestions, true);
+    //                 for (var i = 0; i < qNumber; i++)
+    //                 {
+    //                     if(allQuestions != null && (qNumber <= numQuestions))
+    //                     {
+    //                         questionData[i] = allQuestions[rndquestnumbers[i]]._doc;
+    //                         response = {"error" : false,"message" : questionData};
+    //                     }
+    //                     else
+    //                     {
+    //                         response = {"error" : true,"message" : "Opps some parameter is wrong"};
+    //                     }
+    //                 }
+    //               //console.log("QUESTIONS IN GAMEREQUEST ARE = " + JSON.stringify(questionData) );
+    //               //updateQuestionsGameRequestInfo(mysocket.invitingusername , mysocket.invitedusername, mysocket.categoryid , questionData);
     
-                var isExpired = false;
-                var completed = 0;
-                var isDeclined = false;
-                var isCurrentViewerDeletedDiv = false;
+    //             var isExpired = false;
+    //             var completed = 0;
+    //             var isDeclined = false;
+    //             var isCurrentViewerDeletedDiv = false;
 
-                insertGameRequest(mysocket.currentTimeInSeconds, mysocket.invitingusername , mysocket.invitedusername, mysocket.invitinguserid, mysocket.inviteduserid, mysocket.categoryid, mysocket.categoryname, isExpired, completed, isDeclined, isCurrentViewerDeletedDiv, function(err , newGameRequest) {                        
+    //             insertGameRequest(mysocket.currentTimeInSeconds, mysocket.invitingusername , mysocket.invitedusername, mysocket.invitinguserid, mysocket.inviteduserid, mysocket.categoryid, mysocket.categoryname, isExpired, completed, isDeclined, isCurrentViewerDeletedDiv, function(err , newGameRequest) {                        
 
-                    if(newGameRequest != null)
-                    {
-                        console.log("insertGameRequest'ten gelen cevap = " + newGameRequest); 
-                    }
-                    else
-                        console.log(" ERROR !!! insert edilemedi!!!"); 
+    //                 if(newGameRequest != null)
+    //                 {
+    //                     console.log("insertGameRequest'ten gelen cevap = " + newGameRequest); 
+    //                 }
+    //                 else
+    //                     console.log(" ERROR !!! insert edilemedi!!!"); 
                    
-                });
+    //             });
 
-                setFriendChallengeQuestions(mysocket.currentTimeInSeconds, mysocket.invitinguserid , mysocket.inviteduserid, mysocket.categoryid, mysocket.categoryname, questionData, function(err , newGameQuestions) {                        
+    //             setFriendChallengeQuestions(mysocket.currentTimeInSeconds, mysocket.invitinguserid , mysocket.inviteduserid, mysocket.categoryid, mysocket.categoryname, questionData, function(err , newGameQuestions) {                        
 
-                    if(newGameQuestions != null)
-                    {
-                       // console.log("setFriendChallengeQuestions'ten gelen cevap = " + newGameQuestions); 
-                    }
-                    else
-                        console.log(" ERROR !!! sorular set edilemedi!!!"); 
+    //                 if(newGameQuestions != null)
+    //                 {
+    //                    // console.log("setFriendChallengeQuestions'ten gelen cevap = " + newGameQuestions); 
+    //                 }
+    //                 else
+    //                     console.log(" ERROR !!! sorular set edilemedi!!!"); 
                    
-                });
+    //             });
 
-                socket.emit('gamerequest', questionData);
+    //             socket.emit('gamerequest', questionData);
 
-                /****questionların gamerequest schemasına kaydedildiği zamanki insertGameRequest bu ****** 
+    //             /****questionların gamerequest schemasına kaydedildiği zamanki insertGameRequest bu ****** 
                                        
-                    insertGameRequest(mysocket.invitingusername , mysocket.invitedusername, mysocket.categoryid, data.name , questionData);
-                 // insertGameRequest() metodu GameRequests modeline yeni bir kayıt yapıyor.
+    //                 insertGameRequest(mysocket.invitingusername , mysocket.invitedusername, mysocket.categoryid, data.name , questionData);
+    //              // insertGameRequest() metodu GameRequests modeline yeni bir kayıt yapıyor.
 
-                    socket.emit('gamerequest', questionData);
+    //                 socket.emit('gamerequest', questionData);
                                             
-                /****questionların gamerequest schemasına kaydedildiği zamanki insertGameRequest bu ****** */
+    //             /****questionların gamerequest schemasına kaydedildiği zamanki insertGameRequest bu ****** */
 
-                }
-                else
-                {
-                    console.log("Data is null")
-                }
-            });
-        });
+    //             }
+    //             else
+    //             {
+    //                 console.log("Data is null")
+    //             }
+    //         });
+    //     });
 
         socket.on('allCategories', function(mysocket)
         {
@@ -2169,6 +2418,7 @@ function setRoomAndScoresarraySendQuestions(socket, socketEntity, categoryId){
 
             var newGame = new RandomChallengedGames();
  
+            newGame.typeOf = 'randomchallenge';
             newGame.roomId = theRoom.roomId;
             newGame.currentTimeInSeconds = theRoom.currentTimeInSeconds;
             newGame.categoryid = theRoom.categoryId;
@@ -2220,13 +2470,20 @@ function setRoomAndScoresarraySendQuestions(socket, socketEntity, categoryId){
     // *********************** ÖNEMLİ !!!!!!!!!!!!!!!!!**************************
             // Odaya her yeni biri girdiğinde odadaki herkese soruları tekrar yolluyo verimsiz bir durum bu.
             // Düzelt Bunu sonra
-            io.to(roomId).emit(categoryId, {    
+           /* io.to(roomId).emit(categoryId, {    
                     questions: currentQuestions,
                     theRoomId: roomId,
                     currentTimeInSeconds: mycurrentTimeInSeconds,
                     connectionIndex: connectionIndx 
-            });   
+            });   */
   // *********************** ÖNEMLİ !!!!!!!!!!!!!!!!!**************************
+
+            socket.emit(categoryId, {
+                      questions: currentQuestions,
+                      theRoomId: roomId,
+                      currentTimeInSeconds: mycurrentTimeInSeconds,
+                      connectionIndex: connectionIndx 
+            });
           
             if(roomObject[0].numUsers == 3){
                  roomObject.pop();
@@ -2237,3 +2494,43 @@ function setRoomAndScoresarraySendQuestions(socket, socketEntity, categoryId){
             console.log("There is availble room  = " + roomObject.length);           
          }
 }
+
+
+
+
+
+
+/*
+router.route("/sentgamerequest/list/:invitingusr")
+    .get(function (req, res) {
+
+        console.log('/sentgamerequest/list/:invitingusr e girdi !!!! ' );
+
+        var currentTimeInSeconds = Math.round(new Date().getTime()/1000);
+       
+        checkGameRequestsTimeouts(currentTimeInSeconds);
+
+        var invitingusername = req.params.invitingusr;
+        getSentGameRequestListForUsername(invitingusername , function(err, data)
+        {
+            if (err)
+            {
+                console.log(err);
+                response = {"error" : true,"message" : "There is not any gamerequest record"};
+            }
+            else if(data != null)
+            {
+                console.log('/gamerequest/list/:invitedusr ELSE IF İÇİ data = ');
+                data.questions = null;
+                res.status(200).json(data);
+            }
+            else if(data == null)
+            {
+                console.log('No game request exists.... ');
+                res.status(500).json({"error" : true,"message" : "There is not any gamerequest record"});
+            }
+        });
+    })    
+
+*/
+

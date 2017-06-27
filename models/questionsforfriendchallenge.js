@@ -14,8 +14,6 @@ var QuestionsSchema  = {                      // BURDA NIYE new mongoSchema demi
         "choices" : [String]
     }],
     "currentTime" : Number,
-    "timeoutTime" : Number,
-  //  "usersThatDidntDeleteGame": [String],
     "completed": Number
 };
 module.exports = mongoose.model('questionsforfriendchallenge',QuestionsSchema);

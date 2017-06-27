@@ -2,6 +2,7 @@ var mongoose    =   require("mongoose");
 //mongoose.connect('mongodb://localhost:27017/tempswot');
 var mongoSchema =   mongoose.Schema;
 var RandomChallengedGamesSchema  = {
+    "typeOf" : String,
     "roomId" : String,
     "currentTimeInSeconds" : Number,
     "categoryid" : String,

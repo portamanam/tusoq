@@ -2,6 +2,7 @@ var mongoose    =   require("mongoose");
 //mongoose.connect('mongodb://localhost:27017/tempswot');
 var mongoSchema =   mongoose.Schema;
 var FriendChallengedGameSchema  = {                      // BURDA NIYE new mongoSchema demiyo.
+    "typeOf" : String,
     "currentTimeInSeconds": Number,
     "invitingusername" : String,
     "invitedusername" : String,
@@ -17,6 +18,7 @@ var FriendChallengedGameSchema  = {                      // BURDA NIYE new mongo
     }],*/
     "timeoutTime" : Number,
     "isExpired"   : Boolean,
+    "timeLeft"    : Number,
     "isDeclined"  : Boolean,
     "scoreArrayForChallengeRank": [{
                     "updaterUsername": String,
