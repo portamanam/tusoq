@@ -29,7 +29,8 @@ var FacebookStrategy = require('passport-facebook').Strategy;
 var async = require('async');
 var nodemailer = require('nodemailer');
 var router      =   express.Router();
-mongoose.connect('mongodb://localhost:27017/swot');
+var mongoURL = 'mongodb://userD4J:udvEGQJgtfTrPMMM@mongodb/sampledb';
+mongoose.connect(mongoURL);
 
 // Configure app to use validation system with our config (custom rules)
 var expressValidator = require('express-validator');
