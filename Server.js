@@ -498,7 +498,7 @@ function findFriendChallengedGameHistoryWUsername(myuserId, mycurrenttimeinsecon
            console.log("findFriendChallengedGameHistoryWUsername games.length = " + games.length)            
             
             for(i=0; i<games.length; i++){
-               console.log("games[i] = " + games[i] );               
+               // console.log("games[i] = " + games[i] );               
                
                if(games[i].timeoutTime <= mycurrenttimeinseconds && games[i].completed == 0){
                     games[i].isExpired = true;
@@ -517,7 +517,7 @@ function findFriendChallengedGameHistoryWUsername(myuserId, mycurrenttimeinsecon
 
 function getGameRequestListForUserId(myuserId, mycurrenttimeinseconds, callback)
 {
-    console.log("getGameRequestListForUserId içi userID = " + myuserId);
+    console.log("getGameRequestListForUserId içi userID SSSSSSSSSSSSSSSSSS = " + myuserId);
     var userId = myuserId;
 
     GameRequests.find({usersThatDidntDeleteGame : userId}, function(err, games) {
@@ -861,7 +861,10 @@ function insertGameRequest(mytypeOf, mycurrentTimeInSeconds, myinvitingusername,
     console.log(" insertGameRequest'e GİRDİ currentTimeInSeconds = " + mycurrentTimeInSeconds + " myinvitinguserid = " + myinvitinguserid + " myinviteduserid = " + myinviteduserid)
 
    // var curTimeInSeconds = Math.round(new Date().getTime()/1000);
-    var timeoutValue = 60;
+   
+   //******************************** TIMEOUT ZAMANI BURDA *************** */
+    var timeoutValue = 360;
+   //******************************** TIMEOUT ZAMANI BURDA *************** */
 
     var scoreInfoObjectForChallengeRanking = {userScore : 0,
                                            userTime : 0,
@@ -1360,63 +1363,6 @@ router.route("/delete/everything/:username").post(function (req, res) {
 })        
 
 
-router.route("/gamerequest/accept/:currentTimeInSeconds/:invitingusr/:invitedusr/:invitingusrId/:invitedusrId/:categoryid/:categoryname")
-    .get(function (req, res) {
-
-    console.log('/gamerequest/accept/:invitingusr/:invitedusr/ GİRDİ!!!');
-
-    var invitingusername = req.params.invitingusr;
-    var invitedusername = req.params.invitedusr;
-    var invitinguserid = req.params.invitingusrId;
-    var inviteduserid = req.params.invitedusrId;
-    var gamereqcategoryid = req.params.categoryid;
-    var gamereqcategoryname = req.params.categoryname;
-    var currentTimeInSeconds = req.params.currentTimeInSeconds
-    console.log('/gamerequest/accept/ PARAMETRELERİ = ' + invitinguserid + ' ' + inviteduserid + ' ' + gamereqcategoryid + ' TIME = ' + currentTimeInSeconds);
-
-    getFriendChallengeQuestions(currentTimeInSeconds, invitinguserid , inviteduserid, gamereqcategoryid, function(err, data) {        
-            if (err)
-            {
-                console.log(err);
-                response = {"error" : true,"message" : "There is not any gamerequest record"};
-            }
-            else if(data != null)
-            {
-                console.log('QUESTIONS IN ACCEPT ARE = ' + data.questions);
-                //insertGamesFromGameRequests(invitingusername, invitedusername, gamereqcategoryid, gamereqcategoryname, data.timeoutTime)
-
-                res.status(200).json(data.questions);
-            }
-            else if(data == null)
-            {
-                console.log('No game request exists.... ');
-                res.status(500).json("NULL DATA...");
-            }
-    });
-
-    getGameRequestInfo(currentTimeInSeconds, invitinguserid , inviteduserid, gamereqcategoryid, function(err, data) {       
-            if (err)
-            {
-                console.log(err);
-                response = {"error" : true,"message" : "There is not any gamerequest record"};
-            }
-            else if(data != null)
-            {
-                console.log('/gamerequest/accept getGameRequestInfo ELSE İÇİ');
-                insertFriendChallengedGameFromGameRequest(data.typeOf, currentTimeInSeconds, invitingusername, invitedusername, invitinguserid, inviteduserid, gamereqcategoryid, gamereqcategoryname, data.timeoutTime, data.isExpired, data.scoreArrayForChallengeRank, data.completed, data.isCurrentViewerDeletedDiv);
-               // data.usersThatDidntDeleteGame.push(invitedusername);
-                
-                deleteGameRequestInfo(currentTimeInSeconds, invitinguserid , inviteduserid, gamereqcategoryid);
-            }
-            else if(data == null)
-            {
-                console.log('No game request exists.... ');
-                res.status(500).json("NULL DATA...");
-            }
-    });
-    
-})
-
 router.route("/gamerequest/decline/:currentTimeInSeconds/:invitingusrId/:invitedusrId/:categoryid/:decliningusername")
     .get(function (req, res) {
 
@@ -1675,7 +1621,63 @@ router.route("/game/classical/getquestions/:categoryId")
     })
 
 
+router.route("/gamerequest/accept/:currentTimeInSeconds/:invitingusr/:invitedusr/:invitingusrId/:invitedusrId/:categoryid/:categoryname")
+    .get(function (req, res) {
 
+    console.log('/gamerequest/accept/:invitingusr/:invitedusr/ GİRDİ!!!');
+
+    var invitingusername = req.params.invitingusr;
+    var invitedusername = req.params.invitedusr;
+    var invitinguserid = req.params.invitingusrId;
+    var inviteduserid = req.params.invitedusrId;
+    var gamereqcategoryid = req.params.categoryid;
+    var gamereqcategoryname = req.params.categoryname;
+    var currentTimeInSeconds = req.params.currentTimeInSeconds
+    var typeOf = 'friendchallenge';
+    console.log('/gamerequest/accept/ PARAMETRELERİ = ' + invitinguserid + ' ' + inviteduserid + ' ' + gamereqcategoryid + ' TIME = ' + currentTimeInSeconds);
+
+    getFriendChallengeQuestions(currentTimeInSeconds, invitinguserid , inviteduserid, gamereqcategoryid, function(err, data) {        
+            if (err)
+            {
+                console.log(err);
+                response = {"error" : true,"message" : "There is not any gamerequest record"};
+            }
+            else if(data != null)
+            {
+                console.log('QUESTIONS IN ACCEPT ARE = ' + data.questions);
+                //insertGamesFromGameRequests(invitingusername, invitedusername, gamereqcategoryid, gamereqcategoryname, data.timeoutTime)
+
+                res.status(200).json(data.questions);
+            }
+            else if(data == null)
+            {
+                console.log('No game request exists.... ');
+                res.status(500).json("NULL DATA...");
+            }
+    });
+
+    getGameRequestInfo(currentTimeInSeconds, invitinguserid , inviteduserid, gamereqcategoryid, function(err, data) {       
+            if (err)
+            {
+                console.log(err);
+                response = {"error" : true,"message" : "There is not any gamerequest record"};
+            }
+            else if(data != null)
+            {
+                console.log('/gamerequest/accept getGameRequestInfo ELSE İÇİ');
+                insertFriendChallengedGameFromGameRequest(typeOf, currentTimeInSeconds, invitingusername, invitedusername, invitinguserid, inviteduserid, gamereqcategoryid, gamereqcategoryname, data.timeoutTime, data.isExpired, data.scoreArrayForChallengeRank, data.completed, data.isCurrentViewerDeletedDiv);
+               // data.usersThatDidntDeleteGame.push(invitedusername);
+                
+                deleteGameRequestInfo(currentTimeInSeconds, invitinguserid , inviteduserid, gamereqcategoryid);
+            }
+            else if(data == null)
+            {
+                console.log('No game request exists.... ');
+                res.status(500).json("NULL DATA...");
+            }
+    });
+    
+})
 
 router.route("/gamerequest/friendchallenged/:invitingusr/:invitedusr/:invitingusrId/:invitedusrId/:categoryname/:categoryid")
     .get(function (req, res) {
@@ -1729,7 +1731,7 @@ router.route("/gamerequest/friendchallenged/:invitingusr/:invitedusr/:invitingus
             var completed = 0;
             var isDeclined = false;
             var isCurrentViewerDeletedDiv = false; // client tarafı için kullanılıyolar bu. O anda appi kullanan userın div'i silince o divin kaybolmasını sağlamak için
-            var typeOf = 'friendchallenge';
+            var typeOf = 'gamerequest';
             insertGameRequest(typeOf, currentTimeInSeconds, invitingusername , invitedusername, invitinguserid, inviteduserid, gamereqcategoryid, gamereqcategoryname, isExpired, completed, isDeclined, isCurrentViewerDeletedDiv, function(err , newGameRequest) {                        
 
                 if(newGameRequest != null)
@@ -1917,7 +1919,7 @@ router.route("/friendChallengedGameHistory/list/:userId")
 
     findFriendChallengedGameHistoryWUsername(userId, currentTimeInSeconds, function(err , games) {
          
-        console.log("randomChallengedGameHistory gameHistory içi GAMES = " + games + " USERID = " + userId + "  length = " + games.length);                          
+        console.log("friendChallengedGameHistory gameHistory içi GAMES = " + games + " USERID = " + userId + "  length = " + games.length);                          
 
         if (err)
         {
