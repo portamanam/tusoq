@@ -22,7 +22,7 @@ var app = express();
 var server = require('http').createServer(app);
 
 var io = require('socket.io')(server);
-var port = process.env.PORT || 3100;
+var port = process.env.PORT || 8080;
 var passport = require('passport');
 var LocalStrategy = require('passport-local').Strategy;
 var FacebookStrategy = require('passport-facebook').Strategy;
