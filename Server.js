@@ -1,4 +1,4 @@
-// Setup basic express server Version 7      s
+// Setup basic express server
 var mongoOp     =   require("./models/mongo");
 var quizzesOp     =   require("./models/quizzes");
 var bodyParser  =   require("body-parser");
@@ -7,7 +7,7 @@ var Player     =   require("./models/player");
 var FacebookPlayer = require("./models/facebookplayer");
 var dbFiller = require('./libs/database-filler.js');
 var OnlineUsers   =   require("./models/onlineusers");
-//////
+
 var RandomChallengedGames     =   require("./models/randomchallengedgames");
 var FriendChallengedGames   =   require("./models/friendchallengedgames");
 var GameRequests   =   require("./models/gamerequests");
@@ -22,15 +22,14 @@ var app = express();
 var server = require('http').createServer(app);
 
 var io = require('socket.io')(server);
-var port = process.env.PORT || 8080;
+var port = process.env.PORT || 3100;
 var passport = require('passport');
 var LocalStrategy = require('passport-local').Strategy;
 var FacebookStrategy = require('passport-facebook').Strategy;
 var async = require('async');
 var nodemailer = require('nodemailer');
 var router      =   express.Router();
-var mongoURL = 'mongodb://userD4J:udvEGQJgtfTrPMMM@mongodb/sampledb';
-mongoose.connect(mongoURL);
+mongoose.connect('mongodb://localhost:27017/swot');
 
 // Configure app to use validation system with our config (custom rules)
 var expressValidator = require('express-validator');
