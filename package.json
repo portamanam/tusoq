@@ -42,7 +42,10 @@
       "passport-local-mongoose": "^4.0.0",
       "pwd": "^1.1.0",
       "q": "^1.4.1",
-      "validator": "^5.5.0"
+      "validator": "^5.5.0",
+	  "passport-faceboook": "^2.1.1",
+	  "minimatch": "^3.0.2",
+	  "graceful-fs": "^3.0.2",
 
   },
   "devDependencies": {
