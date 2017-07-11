@@ -22,14 +22,17 @@ var app = express();
 var server = require('http').createServer(app);
 
 var io = require('socket.io')(server);
-var port = process.env.PORT || 3100;
+//var port = process.env.PORT || 3100;
+var port = process.env.PORT || process.env.OPENSHIFT_NODEJS_PORT || 8080;
 var passport = require('passport');
 var LocalStrategy = require('passport-local').Strategy;
 var FacebookStrategy = require('passport-facebook').Strategy;
 var async = require('async');
 var nodemailer = require('nodemailer');
 var router      =   express.Router();
-mongoose.connect('mongodb://localhost:27017/swot');
+var mongoURL = 'mongodb://user2GO:nLXfHKg7MsyCxuVn@localhost:27017/sampledb';
+//var mongoURL = 'mongodb://userNM2:aheBkYDlNNTRFT3M@localhost:27017/sampledb';
+mongoose.connect(mongoURL);
 
 // Configure app to use validation system with our config (custom rules)
 var expressValidator = require('express-validator');
