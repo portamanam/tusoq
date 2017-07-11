@@ -26,11 +26,11 @@ var io = require('socket.io')(server);
 var port = process.env.PORT || process.env.OPENSHIFT_NODEJS_PORT || 8080;
 var passport = require('passport');
 var LocalStrategy = require('passport-local').Strategy;
-var FacebookStrategy = require('passport-facebook').Strategy;
+var FacebookStrategy = require('passport-faceboook').Strategy;
 var async = require('async');
 var nodemailer = require('nodemailer');
 var router      =   express.Router();
-var mongoURL = 'mongodb://user2GO:nLXfHKg7MsyCxuVn@localhost:27017/sampledb';
+var mongoURL = 'mongodb://user2GO:nLXfHKg7MsyCxuVn@@mongodb/sampledb';
 //var mongoURL = 'mongodb://userNM2:aheBkYDlNNTRFT3M@localhost:27017/sampledb';
 mongoose.connect(mongoURL);
 
