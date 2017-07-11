@@ -30,7 +30,7 @@ var FacebookStrategy = require('passport-facebook').Strategy;
 var async = require('async');
 var nodemailer = require('nodemailer');
 var router      =   express.Router();
-var mongoURL = 'mongodb://user2GO:nLXfHKg7MsyCxuVn@@mongodb/sampledb';
+var mongoURL = 'mongodb://user2GO:nLXfHKg7MsyCxuVn@mongodb/sampledb';
 //var mongoURL = 'mongodb://userNM2:aheBkYDlNNTRFT3M@localhost:27017/sampledb';
 mongoose.connect(mongoURL);
 
